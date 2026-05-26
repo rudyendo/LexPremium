@@ -1,0 +1,6 @@
+{
+  "name": "LexPremium",
+  "description": "Sistema avançado para advogados gerenciarem prazos processuais e tarefas administrativas (agenda, reuniões, despachos) com relatórios automáticos e interface simplificada.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,305 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Primitive validation helpers
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); }
+
+    // 2. Cycle-free primitive profile selectors
+    function getRole() { 
+      let path = /databases/$(database)/documents/userProfiles/$(request.auth.uid);
+      return exists(path) ? get(path).data.get('role', 'ESTAGIÁRIO') : 'ESTAGIÁRIO'; 
+    }
+
+    // Note: getOfficeId() is non-recursive and fallback to request.auth.uid is safe
+    function getOfficeId() { 
+      let path = /databases/$(database)/documents/userProfiles/$(request.auth.uid);
+      return exists(path) ? get(path).data.get('officeId', request.auth.uid) : request.auth.uid; 
+    }
+
+    function getSector() {
+      let path = /databases/$(database)/documents/userProfiles/$(request.auth.uid);
+      let s = exists(path) ? get(path).data.get('sector', 'GERAL') : 'GERAL';
+      return (s == null || s == '') ? 'GERAL' : s;
+    }
+
+    function isAdmin() { return isVerified() && getRole() == 'ADMINISTRADOR'; }
+    function isIntern() { return isVerified() && getRole() == 'ESTAGIÁRIO'; }
+
+    function isSuperAdmin() {
+      return isVerified() && (
+        request.auth.uid == 'prCam8MZEgfx9SQ7WUnt7cXKViq2' ||
+        request.auth.token.get('email', '') == 'rudyendo@gmail.com' ||
+        request.auth.token.email == 'rudyendo@gmail.com'
+      );
+    }
+
+    // 3. Document access policies (deadlines, adminTasks, monitoredProcesses)
+    function canReadDoc(doc) {
+      let userRole = getRole();
+      let userOffice = getOfficeId();
+      let docOffice = doc.get('officeId', '');
+      let docSector = doc.get('sector', 'GERAL');
+      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
+      
+      return isVerified() && 
+             (userOffice == docOffice) && 
+             (
+               userRole == 'ADMINISTRADOR' ||
+               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector) ||
+               ((userRole == 'ADVOGADO' || userRole == 'ESTAGIÁRIO') && 
+                (doc.get('userId', '') == request.auth.uid || doc.get('assignedTo', '') == request.auth.uid))
+             );
+    }
+
+    // Write policy
+    function canWriteDoc(doc) {
+      let userRole = getRole();
+      let userOffice = getOfficeId();
+      let docOffice = doc.get('officeId', '');
+      let docSector = doc.get('sector', 'GERAL');
+      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
+
+      return isVerified() && 
+             (userOffice == docOffice) && 
+             (userRole != 'ESTAGIÁRIO') &&
+             (
+               userRole == 'ADMINISTRADOR' ||
+               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector) ||
+               (userRole == 'ADVOGADO' && 
+                (doc.get('userId', '') == request.auth.uid || doc.get('assignedTo', '') == request.auth.uid))
+             );
+    }
+
+    // Delete policy
+    function canDeleteDoc(doc) {
+      let userRole = getRole();
+      let userOffice = getOfficeId();
+      let docOffice = doc.get('officeId', '');
+      let docSector = doc.get('sector', 'GERAL');
+      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
+
+      return isVerified() && 
+             (userOffice == docOffice) && 
+             (userRole != 'ESTAGIÁRIO') && 
+             (
+               userRole == 'ADMINISTRADOR' ||
+               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector) ||
+               (userRole == 'ADVOGADO' && 
+                (doc.get('userId', '') == request.auth.uid || doc.get('assignedTo', '') == request.auth.uid))
+             );
+    }
+
+    // 4. Client read/write policies
+    function canReadClient(doc) {
+      let userRole = getRole();
+      let userOffice = getOfficeId();
+      let docOffice = doc.get('officeId', '');
+      let docSector = doc.get('sector', 'GERAL');
+      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
+
+      return isVerified() && 
+             (userOffice == docOffice) && 
+             (
+               userRole == 'ADMINISTRADOR' || userRole == 'ESTAGIÁRIO' || userRole == 'ADVOGADO' ||
+               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector)
+             );
+    }
+
+    // Client write policy
+    function canWriteClient(doc) {
+      let userRole = getRole();
+      let userOffice = getOfficeId();
+      let docOffice = doc.get('officeId', '');
+      let docSector = doc.get('sector', 'GERAL');
+      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
+
+      return isVerified() && 
+             (userOffice == docOffice) && 
+             (userRole != 'ESTAGIÁRIO') &&
+             (
+               userRole == 'ADMINISTRADOR' ||
+               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector) ||
+               (userRole == 'ADVOGADO' && (effectiveDocSector == getSector() || effectiveDocSector == 'GERAL' || doc.get('userId', '') == request.auth.uid))
+             );
+    }
+
+    // 5. Schema validation blueprints
+    function isValidDeadline(data) {
+      return data.get('peca', '') is string && data.get('peca', '').size() <= 200 &&
+             data.get('responsavel', '') is string && data.get('responsavel', '').size() <= 200 &&
+             data.get('empresa', '') is string && data.get('empresa', '').size() <= 200 &&
+             data.get('assunto', '') is string && data.get('assunto', '').size() <= 500 &&
+             data.get('data', '') is string && data.get('data', '').size() <= 10 &&
+             data.get('status', '') is string && 
+             data.get('userId', '') is string &&
+             data.get('officeId', '') is string &&
+             data.get('sector', 'GERAL') in ['TRIBUTÁRIO', 'CÍVEL', 'LICITAÇÕES', 'TRABALHISTA', 'GERAL'];
+    }
+
+    function isValidFinanceTransaction(data) {
+      return data.get('type', '') in ['RECEITA', 'DESPESA'] &&
+             data.get('category', '') in ['HONORÁRIOS', 'CONSULTORIA', 'SÓCIOS', 'SALÁRIOS', 'IMPOSTOS', 'INFRAESTRUTURA', 'ALUGUEL', 'MATERIAL', 'REEMBOLSO', 'OUTROS'] &&
+             data.get('amount', 0) is number &&
+             data.get('description', '') is string && data.get('description', '').size() <= 1000 &&
+             data.get('date', '') is string && data.get('date', '').size() <= 10 &&
+             data.get('status', '') in ['PAGO', 'PENDENTE'] &&
+             data.get('userId', '') is string &&
+             data.get('officeId', '') is string;
+    }
+
+    // 6. Match rules per collection
+    
+    match /userProfiles/{userId} {
+      allow get, list: if isVerified() && (
+        isSuperAdmin() ||
+        request.auth.uid == userId
+      );
+      allow get: if isVerified() && (
+        request.auth.uid == userId || 
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId == resource.data.get('officeId', '') || 
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.memberOf.hasAny([resource.data.officeId]) ||
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId in resource.data.get('memberOf', [])
+      );
+      allow list: if isVerified() && (
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId in resource.data.get('memberOf', [])
+      );
+      allow create: if isVerified() && (request.auth.uid == userId || isAdmin() || isSuperAdmin());
+      allow update: if isVerified() && (
+        isAdmin() || 
+        isSuperAdmin() ||
+        (request.auth.uid == userId && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['role', 'sector', 'offices', 'memberOf', 'officeId', 'name', 'email', 'oab', 'ufOab', 'adminOab', 'adminUfOab'])
+        )
+      );
+    }
+
+    match /officeSubscriptions/{subId} {
+      allow get, list: if isVerified() && (
+        getOfficeId() == subId || 
+        resource == null ||
+        request.auth.uid == resource.data.ownerId || 
+        isSuperAdmin()
+      );
+      allow write: if isVerified() && (
+        isSuperAdmin() ||
+        (incoming().get('ownerId', '') == request.auth.uid && subId == incoming().get('officeId', ''))
+      );
+    }
+
+    match /deadlines/{deadlineId} {
+      allow list: if isVerified() && (isSuperAdmin() || resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId);
+      allow get: if isVerified() && (isSuperAdmin() || canReadDoc(resource.data));
+      allow create: if isVerified() && (isSuperAdmin() || (!isIntern() && isValidDeadline(incoming()) && incoming().get('officeId', '') == getOfficeId()));
+      allow update: if isVerified() && (isSuperAdmin() || (canWriteDoc(resource.data) && isValidDeadline(incoming()) && incoming().get('officeId', '') == existing().get('officeId', '')));
+      allow delete: if isVerified() && (isSuperAdmin() || canDeleteDoc(resource.data));
+    }
+
+    match /adminTasks/{taskId} {
+      allow list: if isVerified() && (isSuperAdmin() || resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId);
+      allow get: if isVerified() && (isSuperAdmin() || canReadDoc(resource.data));
+      allow create: if isVerified() && (isSuperAdmin() || (!isIntern() && incoming().get('officeId', '') == getOfficeId()));
+      allow update: if isVerified() && (isSuperAdmin() || (canWriteDoc(resource.data) && incoming().get('officeId', '') == existing().get('officeId', '')));
+      allow delete: if isVerified() && (isSuperAdmin() || canDeleteDoc(resource.data));
+    }
+
+    match /clients/{clientId} {
+      allow list: if isVerified() && (isSuperAdmin() || resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId);
+      allow get: if isVerified() && (isSuperAdmin() || canReadClient(resource.data));
+      allow create: if isVerified() && (isSuperAdmin() || (!isIntern() && incoming().get('officeId', '') == getOfficeId()));
+      allow update: if isVerified() && (isSuperAdmin() || (canWriteClient(resource.data) && incoming().get('officeId', '') == existing().get('officeId', '')));
+      allow delete: if isVerified() && (isSuperAdmin() || canDeleteDoc(resource.data));
+    }
+
+    match /jurisprudencias/{jurisId} {
+      allow list, get: if isVerified() && (isSuperAdmin() || resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId);
+      allow create: if isVerified() && (isSuperAdmin() || incoming().get('officeId', '') == getOfficeId());
+      allow update: if isVerified() && (isSuperAdmin() || (!isIntern() && incoming().get('officeId', '') == existing().get('officeId', '')));
+      allow delete: if isVerified() && (isSuperAdmin() || (!isIntern() && incoming().get('officeId', '') == existing().get('officeId', '')));
+    }
+
+    match /settings/{officeId} {
+      allow get: if isVerified() && (officeId == getOfficeId() || officeId == request.auth.uid || isAdmin() || isSuperAdmin());
+      allow create, update: if isVerified() && (officeId == getOfficeId() || officeId == request.auth.uid || isAdmin() || isSuperAdmin());
+    }
+
+    match /correspondence/{docId} {
+      allow get, write: if isVerified() && (docId == request.auth.uid || docId == getOfficeId() || docId == request.auth.token.get('email', '') || isSuperAdmin());
+    }
+
+    match /officeInvites/{inviteId} {
+      allow create: if isVerified() || isSuperAdmin(); 
+      allow list: if isVerified() && (
+        isSuperAdmin() ||
+        resource.data.email == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.email || 
+        resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId
+      );
+      allow get, delete: if isVerified() && (resource == null || isSuperAdmin() || resource.data.get('email', '') == request.auth.token.get('email', '') || resource.data.get('officeId', '') == getOfficeId());
+    }
+
+    match /monitoredProcesses/{procId} {
+      allow list: if isVerified() && (isSuperAdmin() || resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId);
+      allow get: if isVerified() && (isSuperAdmin() || canReadDoc(resource.data));
+      allow create: if isVerified() && (isSuperAdmin() || (!isIntern() && incoming().get('officeId', '') == getOfficeId()));
+      allow update: if isVerified() && (isSuperAdmin() || (canWriteDoc(resource.data) && incoming().get('officeId', '') == existing().get('officeId', '')));
+      allow delete: if isVerified() && (isSuperAdmin() || canDeleteDoc(resource.data));
+    }
+
+    match /financeTransactions/{transId} {
+      allow list: if isVerified() && (
+                     isSuperAdmin() || (
+                     resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId &&
+                     get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'ADMINISTRADOR')
+                   );
+      allow get: if isSuperAdmin() || (isAdmin() && resource.data.officeId == getOfficeId());
+      allow create: if isSuperAdmin() || (isAdmin() && isValidFinanceTransaction(incoming()) && incoming().get('officeId', '') == getOfficeId() && incoming().get('userId', '') == request.auth.uid);
+      allow update: if isSuperAdmin() || (isAdmin() && isValidFinanceTransaction(incoming()) && incoming().get('officeId', '') == getOfficeId() && existing().get('officeId', '') == getOfficeId());
+      allow delete: if isSuperAdmin() || (isAdmin() && existing().get('officeId', '') == getOfficeId());
+    }
+
+    match /recurringExpenses/{expId} {
+      allow list: if isVerified() && (
+                     isSuperAdmin() || (
+                     resource.data.officeId == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.officeId &&
+                     get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'ADMINISTRADOR')
+                   );
+      allow get: if isSuperAdmin() || (isAdmin() && resource.data.officeId == getOfficeId());
+      allow create: if isSuperAdmin() || (isAdmin() && incoming().get('officeId', '') == getOfficeId() && incoming().get('userId', '') == request.auth.uid);
+      allow update: if isSuperAdmin() || (isAdmin() && incoming().get('officeId', '') == getOfficeId() && existing().get('officeId', '') == getOfficeId());
+      allow delete: if isSuperAdmin() || (isAdmin() && existing().get('officeId', '') == getOfficeId());
+    }
+
+    match /publications/{pubId} {
+      allow list: if isVerified() && (isSuperAdmin() || resource.data.officeId == getOfficeId());
+      allow get: if isVerified() && (isSuperAdmin() || resource.data.officeId == getOfficeId());
+      allow create: if isVerified() && (isSuperAdmin() || incoming().get('officeId', '') == getOfficeId());
+      allow update: if isVerified() && (isSuperAdmin() || (incoming().get('officeId', '') == getOfficeId() && existing().get('officeId', '') == getOfficeId()));
+      allow delete: if isVerified() && (isSuperAdmin() || ((getRole() == 'ADMINISTRADOR' || getRole() == 'COORDENADOR') && existing().get('officeId', '') == getOfficeId()));
+    }
+
+    match /timeLogs/{logId} {
+      allow list, get: if isVerified() && (isSuperAdmin() || resource.data.officeId == getOfficeId());
+      allow create: if isVerified() && (isSuperAdmin() || (incoming().get('officeId', '') == getOfficeId() && incoming().get('userId', '') == request.auth.uid));
+      allow update: if isVerified() && (isSuperAdmin() || (existing().get('officeId', '') == getOfficeId() && incoming().get('officeId', '') == getOfficeId() && (
+        getRole() == 'ADMINISTRADOR' || getRole() == 'COORDENADOR' ||
+        (existing().get('userId', '') == request.auth.uid && existing().get('status', 'DRAFT') != 'APPROVED')
+      )));
+      allow delete: if isVerified() && (isSuperAdmin() || (existing().get('officeId', '') == getOfficeId() && (
+        getRole() == 'ADMINISTRADOR' || getRole() == 'COORDENADOR' ||
+        (existing().get('userId', '') == request.auth.uid && existing().get('status', 'DRAFT') != 'APPROVED')
+      )));
+    }
+  }
+}

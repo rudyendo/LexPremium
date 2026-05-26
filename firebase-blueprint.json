@@ -1,0 +1,328 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "Perfil do Usuário",
+      "description": "Dados do usuário, cargo e setor vinculado ao escritório.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMINISTRADOR", "COORDENADOR", "ADVOGADO", "ESTAGIÁRIO"] },
+        "sector": { "type": "string", "enum": ["TRIBUTÁRIO", "CÍVEL", "LICITAÇÕES", "TRABALHISTA", "GERAL"] },
+        "officeId": { "type": "string" },
+        "offices": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "role": { "type": "string" },
+              "sector": { "type": "string" }
+            }
+          } 
+        },
+        "memberOf": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "sector", "officeId"]
+    },
+    "deadline": {
+      "title": "Prazo Jurídico",
+      "description": "Um prazo ou tarefa jurídica vinculada a um cliente.",
+      "type": "object",
+      "properties": {
+        "peca": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "empresa": { "type": "string" },
+        "instituicao": { "type": "string" },
+        "assunto": { "type": "string" },
+        "data": { "type": "string", "format": "date" },
+        "hora": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "documentUrl": { "type": "string" },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "sector": { "type": "string" },
+        "assignedTo": { "type": "string" }
+      },
+      "required": ["peca", "responsavel", "empresa", "assunto", "data", "status", "userId", "officeId", "sector"]
+    },
+    "adminTask": {
+      "title": "Tarefa Administrativa",
+      "description": "Tarefa interna da agenda administrativa.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "status": { "type": "string" },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "sector": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "alerts": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["category", "title", "date", "status", "userId", "officeId", "sector"]
+    },
+    "client": {
+      "title": "Cliente",
+      "description": "Cadastro detalhado de cliente/empresa.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["PF", "PJ"] },
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "document": { "type": "string" },
+        "driveUrl": { "type": "string" },
+        "tradeName": { "type": "string" },
+        "address": { "type": "string" },
+        "adminName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "sector": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "name", "userId", "officeId"]
+    },
+    "jurisprudencia": {
+      "title": "Jurisprudência",
+      "description": "Repositório de jurisprudências salvas pelo usuário.",
+      "type": "object",
+      "properties": {
+        "area": { "type": "string" },
+        "tema": { "type": "string" },
+        "orgao": { "type": "string" },
+        "enunciado": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["area", "tema", "orgao", "enunciado", "userId"]
+    },
+    "settings": {
+      "title": "Configurações",
+      "description": "Configurações Globais do sistema para o usuário.",
+      "type": "object",
+      "properties": {
+        "greenAlertDays": { "type": "number" },
+        "yellowAlertDays": { "type": "number" },
+        "enableBrowserNotifications": { "type": "boolean" },
+        "notificationFrequency": { "type": "string" },
+        "quietMode": { "type": "boolean" },
+        "responsaveis": { "type": "array", "items": { "type": "string" } },
+        "pecas": { "type": "array", "items": { "type": "string" } },
+        "empresas": { "type": "array", "items": { "type": "string" } },
+        "areasDireito": { "type": "array", "items": { "type": "string" } },
+        "orgaosJulgadores": { "type": "array", "items": { "type": "string" } },
+        "temasJuris": { "type": "array", "items": { "type": "string" } },
+        "officeName": { "type": "string" },
+        "officeLogo": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "correspondence": {
+      "title": "Numeração de Correspondência",
+      "description": "Controle de números de Ofícios e Memorandos para o escritório.",
+      "type": "object",
+      "properties": {
+        "oficio": { "type": "array", "items": { "type": "number" } },
+        "memorando": { "type": "array", "items": { "type": "number" } },
+        "officeId": { "type": "string" }
+      },
+      "required": ["oficio", "memorando"]
+    },
+    "officeInvite": {
+      "title": "Convite de Escritório",
+      "description": "Convite enviado para um e-mail para participar de um escritório.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "officeId": { "type": "string" },
+        "officeName": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMINISTRADOR", "COORDENADOR", "ADVOGADO", "ESTAGIÁRIO"] },
+        "invitedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "officeId", "officeName", "role"]
+    },
+    "monitoredProcess": {
+      "title": "Monitoramento de Processo",
+      "description": "Processo judicial monitorado via API Datajud.",
+      "type": "object",
+      "properties": {
+        "cnj": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientId": { "type": "string" },
+        "lastUpdate": { "type": "string", "format": "date-time" },
+        "movements": { "type": "array" },
+        "status": { "type": "string" },
+        "court": { "type": "string" },
+        "officeId": { "type": "string" },
+        "sector": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["cnj", "officeId", "sector", "userId"]
+    },
+    "financeTransaction": {
+      "title": "Transação Financeira",
+      "description": "Lançamento de despesa, receita ou honorários no escritório.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["RECEITA", "DESPESA"] },
+        "category": { "type": "string", "enum": ["HONORÁRIOS", "CONSULTORIA", "SÓCIOS", "SALÁRIOS", "IMPOSTOS", "INFRAESTRUTURA", "ALUGUEL", "MATERIAL", "REEMBOLSO", "OUTROS"] },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "status": { "type": "string", "enum": ["PAGO", "PENDENTE"] },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "category", "amount", "description", "date", "status", "userId", "officeId"]
+    },
+    "recurringExpense": {
+      "title": "Despesa Recorrente Planejada",
+      "description": "Despesas fixas ou recorrentes com agendamento mensal e lembretes.",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "dueDay": { "type": "number" },
+        "isVariable": { "type": "boolean" },
+        "lastBillingMonth": { "type": "string" },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["description", "category", "amount", "dueDay", "isVariable", "userId", "officeId"]
+    },
+    "publication": {
+      "title": "Publicação do DJEN",
+      "description": "Publicações judiciais oficiais do DJEN vinculadas ao escritório.",
+      "type": "object",
+      "properties": {
+        "numeroProcesso": { "type": "string" },
+        "dataDisponibilizacao": { "type": "string" },
+        "dataPublicacao": { "type": "string" },
+        "tribunal": { "type": "string" },
+        "texto": { "type": "string" },
+        "tipoComunicacao": { "type": "string" },
+        "destinatarios": { "type": "array" },
+        "meio": { "type": "string" },
+        "officeId": { "type": "string" }
+      },
+      "required": ["numeroProcesso", "texto", "officeId"]
+    },
+    "officeSubscription": {
+      "title": "Assinatura do Escritório",
+      "description": "Controle de status de cobrança e assinatura mensal para liberação do escritório.",
+      "type": "object",
+      "properties": {
+        "officeId": { "type": "string" },
+        "officeName": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "FREE_TRIAL", "PENDING_PAYMENT", "BLOCKED", "GRATIS"] },
+        "validUntil": { "type": "string", "format": "date" },
+        "planName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["officeId", "officeName", "ownerId", "ownerEmail", "status", "validUntil"]
+    },
+    "timeLog": {
+      "title": "Registro de Horas (Timesheet)",
+      "description": "Controle de tempo despendido em processos, aprovações e auditorias.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "deadlineId": { "type": "string" },
+        "processTitle": { "type": "string" },
+        "peca": { "type": "string" },
+        "activityType": { "type": "string" },
+        "description": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "status": { "type": "string", "enum": ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED"] },
+        "rejectionReason": { "type": "string" },
+        "approvedBy": { "type": "string" },
+        "approvedByName": { "type": "string" },
+        "approvedAt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "date": { "type": "string", "format": "date" },
+        "officeId": { "type": "string" }
+      },
+      "required": ["userId", "userName", "processTitle", "peca", "activityType", "durationSeconds", "status", "createdAt", "date", "officeId"]
+    }
+  },
+  "firestore": {
+    "userProfiles": {
+      "schema": "userProfile",
+      "description": "Perfis de usuários vinculados ao escritório"
+    },
+    "clients": {
+      "schema": "client",
+      "description": "Coleção de clientes cadastrados"
+    },
+    "deadlines": {
+      "schema": "deadline",
+      "description": "Coleção de prazos jurídicos"
+    },
+    "adminTasks": {
+      "schema": "adminTask",
+      "description": "Coleção de tarefas administrativas"
+    },
+    "jurisprudencias": {
+      "schema": "jurisprudencia",
+      "description": "Coleção de jurisprudências"
+    },
+    "settings": {
+      "schema": "settings",
+      "description": "Configurações do usuário"
+    },
+    "correspondence": {
+      "schema": "correspondence",
+      "description": "Controle de numeração de correspondência"
+    },
+    "officeInvites": {
+      "schema": "officeInvite",
+      "description": "Convites para novos membros do escritório"
+    },
+    "monitoredProcesses": {
+      "schema": "monitoredProcess",
+      "description": "Coleção de processos monitorados"
+    },
+    "financeTransactions": {
+      "schema": "financeTransaction",
+      "description": "Lançamentos financeiros (despesas, receitas e honorários)"
+    },
+    "recurringExpenses": {
+      "schema": "recurringExpense",
+      "description": "Modelos de despesas recorrentes e agendamento de contas mensais"
+    },
+    "publications": {
+      "schema": "publication",
+      "description": "Sincronizador nacional de divulgações de Diários da Justiça"
+    },
+    "officeSubscriptions": {
+      "schema": "officeSubscription",
+      "description": "Controle de status de cobrança e assinatura mensal para liberação do escritório"
+    },
+    "timeLogs": {
+      "schema": "timeLog",
+      "description": "Banco de registros de horas (timesheet) dos advogados"
+    }
+  }
+}
