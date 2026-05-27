@@ -3052,13 +3052,23 @@ export default function App() {
       .slice(0, 5);
   }, [deadlines]);
 
+  const officeLawyers = useMemo(() => {
+    if (teamProfiles && teamProfiles.length > 0) {
+      const names = teamProfiles.map((p) => p.name || "").filter(Boolean);
+      return Array.from(new Set(names));
+    }
+    if (userProfile?.name) {
+      return [userProfile.name];
+    }
+    return dynamicSettings.responsaveis || INITIAL_RESPONSAVEIS;
+  }, [teamProfiles, userProfile, dynamicSettings.responsaveis]);
+
   const lawyerProductivityData = useMemo(() => {
-    const resps = dynamicSettings.responsaveis || INITIAL_RESPONSAVEIS;
     const now = new Date();
     const curMonth = now.getMonth();
     const curYear = now.getFullYear();
 
-    return resps
+    return officeLawyers
       .map((name) => {
         const total = deadlines.filter((d) => {
           if (d.status !== DeadlineStatus.COMPLETED || d.responsavel !== name)
@@ -3071,7 +3081,7 @@ export default function App() {
         return { name, total };
       })
       .sort((a, b) => b.total - a.total);
-  }, [deadlines, dynamicSettings.responsaveis]);
+  }, [deadlines, officeLawyers]);
 
   useEffect(() => {
     let unsubscribeProfileSnapshot: (() => void) | null = null;
@@ -8205,7 +8215,7 @@ service cloud.firestore {
                     }
                   >
                     <option value="">Todos os Advogados</option>
-                    {dynamicSettings.responsaveis.map((resp) => (
+                    {officeLawyers.map((resp) => (
                       <option key={resp} value={resp}>
                         {resp}
                       </option>
