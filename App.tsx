@@ -3577,26 +3577,10 @@ export default function App() {
   // Sync Clientes
   useEffect(() => {
     if (!userProfile) return;
-    let q = firestoreQuery(
+    const q = firestoreQuery(
       collection(db, "clients"),
       where("officeId", "==", userProfile.officeId),
     );
-
-    // Filtros de visibilidade por cargo
-    if (userProfile.role === UserRole.COORDINATOR) {
-      if (userProfile.sector === Sector.GENERAL) {
-        q = firestoreQuery(
-          q,
-          or(
-            where("sector", "==", Sector.GENERAL),
-            where("sector", "==", null),
-            where("sector", "==", ""),
-          ),
-        );
-      } else {
-        q = firestoreQuery(q, where("sector", "==", userProfile.sector));
-      }
-    }
 
     const unsubscribe = onSnapshot(
       q,

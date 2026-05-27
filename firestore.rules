@@ -104,18 +104,10 @@ service cloud.firestore {
 
     // 4. Client read/write policies
     function canReadClient(doc) {
-      let userRole = getRole();
       let userOffice = getOfficeId();
       let docOffice = doc.get('officeId', '');
-      let docSector = doc.get('sector', 'GERAL');
-      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
 
-      return isVerified() && 
-             (userOffice == docOffice) && 
-             (
-               userRole == 'ADMINISTRADOR' || userRole == 'ESTAGIÁRIO' || userRole == 'ADVOGADO' ||
-               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector)
-             );
+      return isVerified() && (userOffice == docOffice);
     }
 
     // Client write policy
@@ -123,17 +115,10 @@ service cloud.firestore {
       let userRole = getRole();
       let userOffice = getOfficeId();
       let docOffice = doc.get('officeId', '');
-      let docSector = doc.get('sector', 'GERAL');
-      let effectiveDocSector = (docSector == null || docSector == '') ? 'GERAL' : docSector;
 
       return isVerified() && 
              (userOffice == docOffice) && 
-             (userRole != 'ESTAGIÁRIO') &&
-             (
-               userRole == 'ADMINISTRADOR' ||
-               (userRole == 'COORDENADOR' && getSector() == effectiveDocSector) ||
-               (userRole == 'ADVOGADO' && (effectiveDocSector == getSector() || effectiveDocSector == 'GERAL' || doc.get('userId', '') == request.auth.uid))
-             );
+             (userRole != 'ESTAGIÁRIO');
     }
 
     // 5. Schema validation blueprints
