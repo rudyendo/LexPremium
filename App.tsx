@@ -292,141 +292,136 @@ const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
 };
 
 const AuthScreen = ({
-  onLogin,
   onGoogleLogin,
   loading,
 }: {
-  onLogin: (email: string, pass: string, isSignUp: boolean) => void;
   onGoogleLogin: () => void;
   loading: boolean;
 }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
   return (
-    <div className="fixed inset-0 bg-[#020617] flex items-center justify-center z-[100] p-6">
-      <div className="bg-white/5 backdrop-blur-xl p-8 md:p-12 rounded-[2.5rem] w-full max-w-md border border-white/10 shadow-2xl">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 mb-6 text-white text-2xl font-black">
-            LP
+    <div className="fixed inset-0 bg-[#030712] flex items-center justify-center z-[100] p-6 overflow-hidden">
+      {/* Background Decorative Grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_100%,transparent_100%)] opacity-35" />
+
+      {/* Radial Ambient Glows */}
+      <div className="absolute top-[20%] left-[10%] w-[35rem] h-[35rem] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[20%] right-[10%] w-[35rem] h-[35rem] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* Main card */}
+      <div className="bg-[#0b1329]/60 backdrop-blur-2xl p-10 md:p-14 rounded-[2rem] w-full max-w-md border border-white/10 shadow-2xl relative flex flex-col items-center">
+        {/* Glow effect at the top border */}
+        <div className="absolute top-0 left-12 right-12 h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
+
+        {/* Brand Header */}
+        <div className="text-center mb-10 w-full">
+          {/* Custom Elegant Logo Emblem */}
+          <div className="relative inline-flex items-center justify-center w-20 h-20 mb-6 group">
+            {/* Background geometric pattern */}
+            <div className="absolute inset-0 bg-blue-600/10 rounded-2xl border border-blue-500/20 rotate-45 transition-transform duration-700 group-hover:rotate-90" />
+            <div className="absolute inset-1 bg-[#0b1329] rounded-2xl border border-white/5" />
+            
+            {/* Shield / Scale Geometric Monogram */}
+            <svg
+              className="w-8 h-8 text-blue-400 relative z-10 transition-transform duration-300 group-hover:scale-105"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9 12l2 2 4-4"
+              />
+            </svg>
           </div>
-          <h2 className="text-2xl font-black text-white tracking-tighter">
-            LexPremium
+
+          <h2 className="text-3xl font-bold text-white tracking-tight">
+            Lex<span className="text-blue-500 font-extrabold">Premium</span>
           </h2>
-          <p className="text-slate-500 font-bold uppercase text-[9px] tracking-[0.2em] mt-2">
+          <p className="text-slate-400 font-semibold uppercase text-[10px] tracking-[0.25em] mt-2.5">
             Legal Performance System
           </p>
         </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            onLogin(email, password, isSignUp);
-          }}
-          className="space-y-4"
-        >
-          <input
-            type="email"
-            required
-            className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-            placeholder="E-mail profissional"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            required
-            className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <div className="flex justify-end px-2">
-            {!isSignUp && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!email) {
-                    alert("Digite seu e-mail para recuperar a senha.");
-                    return;
-                  }
-                  // @ts-ignore
-                  import("firebase/auth").then(
-                    ({ getAuth, sendPasswordResetEmail }) => {
-                      sendPasswordResetEmail(getAuth(), email)
-                        .then(() => alert("E-mail de recuperação enviado!"))
-                        .catch((e) => alert("Erro: " + e.message));
-                    },
-                  );
-                }}
-                className="text-[10px] font-black text-slate-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
-              >
-                Esqueci minha senha
-              </button>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-2xl font-bold text-sm uppercase tracking-widest transition-all disabled:opacity-50 mt-4"
-          >
-            {loading
-              ? "Sincronizando..."
-              : isSignUp
-                ? "Criar Nova Conta"
-                : "Acessar Painel"}
-          </button>
-        </form>
 
-        <div className="relative my-8">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-bold">
-            <span className="bg-[#0b1120] px-4 text-slate-500">
-              Ou continue com
-            </span>
-          </div>
+        {/* Corporate Message */}
+        <div className="w-full text-center mb-8">
+          <h3 className="text-white text-base font-medium mb-2.5">
+            Portal Corporativo Autorizado
+          </h3>
+          <p className="text-slate-400 text-xs leading-relaxed max-w-[280px] mx-auto font-normal">
+            Autentique-se com sua conta corporativa institucional Google para acessar o ecossistema estratégico.
+          </p>
         </div>
 
+        {/* Google Sign-In Button */}
         <button
           onClick={onGoogleLogin}
           disabled={loading}
           type="button"
-          className="w-full bg-white hover:bg-slate-50 text-[#001d3d] p-5 rounded-2xl font-bold text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-3 group"
+          className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-[#090d16] py-4 px-6 rounded-xl font-semibold text-sm transition-all duration-200 shadow-xl shadow-black/20 flex items-center justify-center gap-3.5 group disabled:opacity-50 border border-slate-200"
         >
-          <svg
-            className="w-5 h-5 transition-transform group-hover:scale-110"
-            viewBox="0 0 24 24"
-          >
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-            />
-          </svg>
-          Acessar com Google
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
+          ) : (
+            <svg
+              className="w-5 h-5 transition-transform duration-200 group-hover:scale-105"
+              viewBox="0 0 24 24"
+            >
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+          )}
+          <span className="tracking-wide">
+            {loading ? "Sincronizando..." : "Acessar com o Google"}
+          </span>
         </button>
 
-        <button
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full mt-8 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-white transition-colors"
-        >
-          {isSignUp
-            ? "Já possui acesso? Entrar"
-            : "Solicitar novo acesso corporativo"}
-        </button>
+        {/* Security & Compliance Footer */}
+        <div className="mt-12 flex flex-col items-center gap-2.5 opacity-60 text-center w-full">
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
+            <svg
+              className="w-3.5 h-3.5 text-emerald-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+              />
+            </svg>
+            Ambiente Conectado Seguro
+          </div>
+          <p className="text-[10px] text-slate-500 max-w-[240px] leading-relaxed">
+            Este painel utiliza protocolos de segurança SSL/TLS avançados e autenticação única (SSO) do Google.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -3343,7 +3338,7 @@ export default function App() {
 
   // Sync Configurações do Escritório
   useEffect(() => {
-    if (!user || !userProfile) return;
+    if (!user || !userProfile || !userProfile.officeId) return;
     const settingsRef = doc(db, "settings", userProfile.officeId);
     const unsubscribe = onSnapshot(
       settingsRef,
@@ -4681,7 +4676,7 @@ export default function App() {
     fieldOrUpdates: keyof NotificationSettings | Partial<NotificationSettings>,
     newValue?: any,
   ) => {
-    if (!user || !userProfile) return;
+    if (!user || !userProfile || !userProfile.officeId) return;
     setIsSavingSettings(true);
     const settingsRef = doc(db, "settings", userProfile.officeId);
     try {
@@ -6231,7 +6226,6 @@ export default function App() {
   if (!user)
     return (
       <AuthScreen
-        onLogin={handleLogin}
         onGoogleLogin={handleGoogleLogin}
         loading={authLoading}
       />
