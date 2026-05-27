@@ -2458,6 +2458,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   rules: [],
   officeName: "",
   officeLogo: "",
+  categoriasTarefas: Object.values(AdminTaskCategory),
 };
 
 export default function App() {
@@ -2788,6 +2789,14 @@ export default function App() {
   const [clientTypeFilter, setClientTypeFilter] = useState<"ALL" | "PF" | "PJ">("ALL");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAddingMonitoredProcess, setIsAddingMonitoredProcess] = useState(false);
+
+  // States para adição e edição inline de peças e categorias de forma profissional, eliminando prompts
+  const [newPecaInput, setNewPecaInput] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [editingPecaIdx, setEditingPecaIdx] = useState<number | null>(null);
+  const [editingCategoryIdx, setEditingCategoryIdx] = useState<number | null>(null);
+  const [editingPecaValue, setEditingPecaValue] = useState("");
+  const [editingCategoryValue, setEditingCategoryValue] = useState("");
 
   // State para Processos e Notas
   const [newProcess, setNewProcess] = useState({ number: "", title: "" });
@@ -3351,6 +3360,7 @@ export default function App() {
             responsaveis: data.responsaveis || INITIAL_RESPONSAVEIS,
             pecas: data.pecas || INITIAL_PECAS,
             empresas: data.empresas || INITIAL_EMPRESAS,
+            categoriasTarefas: data.categoriasTarefas || Object.values(AdminTaskCategory),
             rules: data.rules || [],
           }));
           setPermissionError(null);
@@ -3361,6 +3371,7 @@ export default function App() {
             responsaveis: INITIAL_RESPONSAVEIS,
             pecas: INITIAL_PECAS,
             empresas: INITIAL_EMPRESAS,
+            categoriasTarefas: Object.values(AdminTaskCategory),
             rules: [],
             createdAt: new Date().toISOString(),
           }).catch((err) =>
@@ -3967,7 +3978,7 @@ export default function App() {
 
   const resetAdminTaskForm = () => {
     setNewAdminTask({
-      category: AdminTaskCategory.MEETING,
+      category: dynamicSettings.categoriasTarefas?.[0] || AdminTaskCategory.MEETING,
       title: "",
       description: "",
       date: formatDateToISO(new Date()),
@@ -5991,7 +6002,8 @@ export default function App() {
       updatedList[index] =
         field === "responsaveis" ||
         field === "pecas" ||
-        field === "empresas"
+        field === "empresas" ||
+        field === "categoriasTarefas"
           ? newValue.toUpperCase()
           : newValue;
       updateSettings(field, updatedList);
@@ -8723,7 +8735,7 @@ service cloud.firestore {
                       Configurações do Escritório
                     </h3>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                      Gerencie peças processuais cadastradas e tipos de documentos
+                      Gerencie peças processuais, categorias de tarefas administrativas e tipos de documentos
                     </p>
                   </div>
                 </div>
@@ -8734,59 +8746,236 @@ service cloud.firestore {
                     Tipos de Peças Processuais ({dynamicSettings.pecas.length})
                   </h4>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-2 pb-2">
-                    {dynamicSettings.pecas.map((p, i) => (
-                      <div
-                        key={i}
-                        className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group border border-slate-100 hover:border-blue-200 hover:bg-white hover:shadow-sm transition-all"
-                      >
-                        <span className="font-bold text-slate-700 text-[10px] md:text-[11px] uppercase ml-1 truncate">
-                          {p}
-                        </span>
-                        <div className="flex gap-1.5 shrink-0">
-                          <button
-                            onClick={() =>
-                              handleEditSetting(
-                                i,
-                                dynamicSettings.pecas,
-                                "pecas",
-                              )
-                            }
-                            className="w-7 h-7 flex items-center justify-center text-blue-500 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-blue-50 hover:border-blue-100 transition-all"
-                          >
-                            <Icons.Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleDeleteSetting(
-                                i,
-                                dynamicSettings.pecas,
-                                "pecas",
-                              )
-                            }
-                            className="w-7 h-7 flex items-center justify-center text-red-400 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-red-50 hover:border-red-100 transition-all"
-                          >
-                            <Icons.Trash className="w-3.5 h-3.5" />
-                          </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+                    {dynamicSettings.pecas.map((p, i) => {
+                      const isEditing = editingPecaIdx === i;
+                      return (
+                        <div
+                          key={i}
+                          className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group border border-slate-100 hover:border-blue-200 hover:bg-white hover:shadow-sm transition-all"
+                        >
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingPecaValue}
+                              onChange={(e) => setEditingPecaValue(e.target.value)}
+                              className="flex-1 mr-2 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="font-bold text-slate-700 text-[10px] md:text-[11px] uppercase ml-1 truncate">
+                              {p}
+                            </span>
+                          )}
+
+                          <div className="flex gap-1.5 shrink-0">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    if (editingPecaValue.trim() !== "") {
+                                      const updatedList = [...dynamicSettings.pecas];
+                                      updatedList[i] = editingPecaValue.trim().toUpperCase();
+                                      updateSettings("pecas", updatedList);
+                                      setEditingPecaIdx(null);
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center text-emerald-600 bg-emerald-50 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all font-bold"
+                                  title="Salvar"
+                                >
+                                  <Icons.Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingPecaIdx(null)}
+                                  className="w-7 h-7 flex items-center justify-center text-slate-500 bg-slate-100 rounded-lg border border-slate-200 hover:bg-slate-200 transition-all font-bold"
+                                  title="Cancelar"
+                                >
+                                  <Icons.Close className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingPecaIdx(i);
+                                    setEditingPecaValue(p);
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center text-blue-500 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-blue-50 hover:border-blue-100 transition-all"
+                                >
+                                  <Icons.Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteSetting(
+                                      i,
+                                      dynamicSettings.pecas,
+                                      "pecas",
+                                    )
+                                  }
+                                  className="w-7 h-7 flex items-center justify-center text-red-400 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-red-50 hover:border-red-100 transition-all"
+                                >
+                                  <Icons.Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      disabled={isSavingSettings}
-                      onClick={() => {
-                        const n = prompt("Descrição:");
-                        if (n && n.trim() !== "")
+                  <div className="mt-4 flex flex-col md:flex-row gap-2 items-stretch">
+                    <input
+                      type="text"
+                      placeholder="Nova peça processual..."
+                      value={newPecaInput}
+                      onChange={(e) => setNewPecaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newPecaInput.trim()) {
                           updateSettings("pecas", [
                             ...dynamicSettings.pecas,
-                            n.toUpperCase(),
+                            newPecaInput.trim().toUpperCase(),
                           ]);
+                          setNewPecaInput("");
+                        }
                       }}
-                      className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 font-bold uppercase focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none placeholder:text-slate-400 transition-all"
+                    />
+                    <button
+                      disabled={isSavingSettings || !newPecaInput.trim()}
+                      onClick={() => {
+                        if (newPecaInput.trim()) {
+                          updateSettings("pecas", [
+                            ...dynamicSettings.pecas,
+                            newPecaInput.trim().toUpperCase(),
+                          ]);
+                          setNewPecaInput("");
+                        }
+                      }}
+                      className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      <Icons.Plus className="w-3.5 h-3.5" /> Adicionar Tipo de Peça
+                      <Icons.Plus className="w-3.5 h-3.5" /> Adicionar Peça
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 my-8"></div>
+
+                <div className="relative">
+                  <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                    Categorias de Tarefas Administrativas ({(dynamicSettings.categoriasTarefas || []).length})
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+                    {(dynamicSettings.categoriasTarefas || []).map((cat, i) => {
+                      const isEditing = editingCategoryIdx === i;
+                      return (
+                        <div
+                          key={i}
+                          className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group border border-slate-100 hover:border-blue-200 hover:bg-white hover:shadow-sm transition-all"
+                        >
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingCategoryValue}
+                              onChange={(e) => setEditingCategoryValue(e.target.value)}
+                              className="flex-1 mr-2 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="font-bold text-slate-700 text-[10px] md:text-[11px] uppercase ml-1 truncate">
+                              {cat}
+                            </span>
+                          )}
+
+                          <div className="flex gap-1.5 shrink-0">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    if (editingCategoryValue.trim() !== "") {
+                                      const updatedList = [...(dynamicSettings.categoriasTarefas || [])];
+                                      updatedList[i] = editingCategoryValue.trim().toUpperCase();
+                                      updateSettings("categoriasTarefas", updatedList);
+                                      setEditingCategoryIdx(null);
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center text-emerald-600 bg-emerald-50 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all font-bold"
+                                  title="Salvar"
+                                >
+                                  <Icons.Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingCategoryIdx(null)}
+                                  className="w-7 h-7 flex items-center justify-center text-slate-500 bg-slate-100 rounded-lg border border-slate-200 hover:bg-slate-200 transition-all font-bold"
+                                  title="Cancelar"
+                                >
+                                  <Icons.Close className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingCategoryIdx(i);
+                                    setEditingCategoryValue(cat);
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center text-blue-500 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-blue-50 hover:border-blue-100 transition-all"
+                                >
+                                  <Icons.Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteSetting(
+                                      i,
+                                      dynamicSettings.categoriasTarefas || [],
+                                      "categoriasTarefas",
+                                    )
+                                  }
+                                  className="w-7 h-7 flex items-center justify-center text-red-400 bg-white rounded-lg shadow-sm border border-slate-100 hover:bg-red-50 hover:border-red-100 transition-all"
+                                >
+                                  <Icons.Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex flex-col md:flex-row gap-2 items-stretch">
+                    <input
+                      type="text"
+                      placeholder="Nova categoria de tarefa..."
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newCategoryInput.trim()) {
+                          updateSettings("categoriasTarefas", [
+                            ...(dynamicSettings.categoriasTarefas || []),
+                            newCategoryInput.trim().toUpperCase(),
+                          ]);
+                          setNewCategoryInput("");
+                        }
+                      }}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 font-bold uppercase focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none placeholder:text-slate-400 transition-all"
+                    />
+                    <button
+                      disabled={isSavingSettings || !newCategoryInput.trim()}
+                      onClick={() => {
+                        if (newCategoryInput.trim()) {
+                          updateSettings("categoriasTarefas", [
+                            ...(dynamicSettings.categoriasTarefas || []),
+                            newCategoryInput.trim().toUpperCase(),
+                          ]);
+                          setNewCategoryInput("");
+                        }
+                      }}
+                      className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Icons.Plus className="w-3.5 h-3.5" /> Adicionar Categoria
                     </button>
                   </div>
                 </div>
@@ -9829,11 +10018,14 @@ service cloud.firestore {
                   onChange={(e) =>
                     setNewAdminTask((p) => ({
                       ...p,
-                      category: e.target.value as AdminTaskCategory,
+                      category: e.target.value,
                     }))
                   }
                 >
-                  {Object.values(AdminTaskCategory).map((cat) => (
+                  {(dynamicSettings.categoriasTarefas && dynamicSettings.categoriasTarefas.length > 0
+                    ? dynamicSettings.categoriasTarefas
+                    : Object.values(AdminTaskCategory)
+                  ).map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>

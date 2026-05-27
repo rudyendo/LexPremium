@@ -133,7 +133,7 @@ export type AdminTaskAlert = '24H' | '2H' | '1H' | 'ON_TIME';
 
 export interface AdminTask {
   id: string;
-  category: AdminTaskCategory;
+  category: AdminTaskCategory | string;
   title: string;
   description?: string;
   date: string;
@@ -177,6 +177,7 @@ export interface NotificationSettings {
   rules: NotificationRule[];
   officeName?: string;
   officeLogo?: string;
+  categoriasTarefas?: string[];
 }
 
 export interface ProcessMovement {
