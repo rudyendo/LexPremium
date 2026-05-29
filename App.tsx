@@ -4637,7 +4637,7 @@ export default function App() {
           userName: userProfile?.name || "Membro",
           userRole: userProfile?.role || UserRole.LAWYER,
           action: 'CREATE',
-          observation: "Atividade Processual Cadastrada",
+          observation: `Atividade Processual Cadastrada\n\nAssunto / Descrição:\n${newDeadline.assunto || "Nenhum assunto registrado."}`,
           timestamp: new Date().toISOString(),
         };
 
@@ -9676,17 +9676,17 @@ service cloud.firestore {
                           </span>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-200/60">
-                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
-                            Assunto / Descrição
-                          </span>
-                          <p className="text-[11px] font-medium text-slate-700 leading-relaxed italic whitespace-pre-wrap">
-                            {selectedAppointment.type === "deadline"
-                              ? (selectedAppointment.data as Deadline).assunto
-                              : (selectedAppointment.data as AdminTask).description ||
+                        {selectedAppointment.type === "task" && (
+                          <div className="pt-3 border-t border-slate-200/60">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Assunto / Descrição
+                            </span>
+                            <p className="text-[11px] font-medium text-slate-700 leading-relaxed italic whitespace-pre-wrap">
+                              {(selectedAppointment.data as AdminTask).description ||
                                 "Nenhuma descrição fornecida."}
-                          </p>
-                        </div>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
