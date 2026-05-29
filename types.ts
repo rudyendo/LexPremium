@@ -92,7 +92,7 @@ export interface ReviewLogEntry {
   userId: string;
   userName: string;
   userRole: UserRole;
-  action: 'SUBMITTED_FOR_REVIEW' | 'STARTED_REVIEW' | 'RETURNED' | 'SENT_TO_ADMIN' | 'ADMIN_APPROVED' | 'COMPLETED' | 'TIMER_SESSION';
+  action: 'SUBMITTED_FOR_REVIEW' | 'STARTED_REVIEW' | 'RETURNED' | 'SENT_TO_ADMIN' | 'ADMIN_APPROVED' | 'COMPLETED' | 'TIMER_SESSION' | 'CREATE' | 'EDIT' | 'ANNOTATION';
   fromState?: ReviewState;
   toState?: ReviewState;
   observation?: string;

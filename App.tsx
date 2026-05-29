@@ -127,6 +127,49 @@ const getRawParties = (h: any) => {
 };
 
 // --- Utilitários ---
+const compileReviewLogs = (logs: ReviewLogEntry[]): ReviewLogEntry[] => {
+  if (!logs || logs.length === 0) return [];
+  
+  // Sort logs by timestamp ascending
+  const sorted = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const compiled: ReviewLogEntry[] = [];
+  
+  for (const log of sorted) {
+    if (compiled.length === 0) {
+      compiled.push({ ...log });
+      continue;
+    }
+    
+    const last = compiled[compiled.length - 1];
+    const lastTime = new Date(last.timestamp);
+    const currTime = new Date(log.timestamp);
+    
+    // Group if made by same user AND within same minute (less than 60s) AND same action type (e.g. EDIT)
+    const isSameUser = last.userId === log.userId;
+    const timeDiffSeconds = Math.abs(currTime.getTime() - lastTime.getTime()) / 1000;
+    
+    if (isSameUser && timeDiffSeconds <= 60 && last.action === log.action) {
+      if (log.observation) {
+        if (last.observation) {
+          // If the observation already contains this exact string, don't duplicate it
+          if (!last.observation.includes(log.observation)) {
+            last.observation = `${last.observation}\n${log.observation}`;
+          }
+        } else {
+          last.observation = log.observation;
+        }
+      }
+      if (typeof log.durationSeconds !== 'undefined') {
+        last.durationSeconds = (last.durationSeconds || 0) + log.durationSeconds;
+      }
+    } else {
+      compiled.push({ ...log });
+    }
+  }
+  
+  return compiled;
+};
+
 const formatLocalDate = (dateStr: string) => {
   if (!dateStr) return "-";
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -2845,6 +2888,9 @@ export default function App() {
 
   const [dynamicSettings, setDynamicSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
 
+  const [newAnnotationText, setNewAnnotationText] = useState("");
+  const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
+
   const [newDeadline, setNewDeadline] = useState<Partial<Deadline>>({
     peca: "",
     responsavel: "",
@@ -4516,6 +4562,7 @@ export default function App() {
       </div>
     );
   };
+
   const handleAddDeadline = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !user.email) return;
@@ -4527,14 +4574,73 @@ export default function App() {
       }
 
       if (editingDeadlineId) {
+        const oldDeadline = deadlines.find(d => d.id === editingDeadlineId);
         const { id, ...updateData } = newDeadline as Deadline;
+        
+        const changes: string[] = [];
+        if (oldDeadline) {
+          if (oldDeadline.peca !== newDeadline.peca) {
+            changes.push(`Atividade Processual alterada de "${oldDeadline.peca || ''}" para "${newDeadline.peca || ''}"`);
+          }
+          if (oldDeadline.responsavel !== finalResponsavel) {
+            changes.push(`Responsável alterado de "${oldDeadline.responsavel || ''}" para "${finalResponsavel || ''}"`);
+          }
+          if (oldDeadline.empresa !== newDeadline.empresa) {
+            changes.push(`Cliente alterado de "${oldDeadline.empresa || ''}" para "${newDeadline.empresa || ''}"`);
+          }
+          if (oldDeadline.data !== newDeadline.data) {
+            changes.push(`Data de Vencimento alterada de "${oldDeadline.data || ''}" para "${newDeadline.data || ''}"`);
+          }
+          if ((oldDeadline.hora || '') !== (newDeadline.hora || '')) {
+            changes.push(`Horário alterado de "${oldDeadline.hora || '--:--'}" para "${newDeadline.hora || '--:--'}"`);
+          }
+          if (oldDeadline.assunto !== newDeadline.assunto) {
+            changes.push(`Assunto alterado de "${oldDeadline.assunto || ''}" para "${newDeadline.assunto || ''}"`);
+          }
+          if ((oldDeadline.instituicao || '') !== (newDeadline.instituicao || '')) {
+            changes.push(`Órgão alterado de "${oldDeadline.instituicao || ''}" para "${newDeadline.instituicao || ''}"`);
+          }
+          const oldSec = oldDeadline.sector || Sector.GENERAL;
+          const newSec = newDeadline.sector || userProfile?.sector || Sector.GENERAL;
+          if (oldSec !== newSec) {
+            changes.push(`Setor alterado de "${oldSec}" para "${newSec}"`);
+          }
+        }
+
+        let systemLogs: ReviewLogEntry[] = [];
+        if (changes.length > 0) {
+          systemLogs.push({
+            id: Date.now().toString(),
+            userId: user.uid,
+            userName: userProfile?.name || "Membro",
+            userRole: userProfile?.role || UserRole.LAWYER,
+            action: 'EDIT',
+            observation: changes.join("\n"),
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const existingLogs = oldDeadline?.reviewLogs || [];
+        const updatedLogs = [...existingLogs, ...systemLogs];
+
         await updateDoc(doc(db, "deadlines", editingDeadlineId), {
           ...updateData,
           sector: newDeadline.sector || userProfile?.sector || Sector.GENERAL,
           responsavel: finalResponsavel,
           updatedAt: new Date().toISOString(),
+          reviewLogs: updatedLogs,
         });
       } else {
+        const initialLog: ReviewLogEntry = {
+          id: Date.now().toString(),
+          userId: user.uid,
+          userName: userProfile?.name || "Membro",
+          userRole: userProfile?.role || UserRole.LAWYER,
+          action: 'CREATE',
+          observation: "Atividade Processual Cadastrada",
+          timestamp: new Date().toISOString(),
+        };
+
         await addDoc(collection(db, "deadlines"), {
           ...newDeadline,
           sector: newDeadline.sector || userProfile?.sector || Sector.GENERAL,
@@ -4544,6 +4650,7 @@ export default function App() {
           userEmail: user.email,
           createdAt: new Date().toISOString(),
           status: DeadlineStatus.PENDING,
+          reviewLogs: [initialLog],
         });
       }
       setIsModalOpen(false);
@@ -4715,7 +4822,22 @@ export default function App() {
       d.status === DeadlineStatus.COMPLETED
         ? DeadlineStatus.PENDING
         : DeadlineStatus.COMPLETED;
-    await updateDoc(doc(db, "deadlines", d.id), { status: newS });
+
+    const newLogEntry: ReviewLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      userId: user?.uid || "",
+      userName: userProfile?.name || "Membro",
+      userRole: userProfile?.role || UserRole.LAWYER,
+      action: 'EDIT',
+      observation: `Status do prazo alterado para ${newS === DeadlineStatus.COMPLETED ? "CONCLUÍDO" : "PENDENTE"}`,
+      timestamp: new Date().toISOString(),
+    };
+    const updatedReviewLogs = [...(d.reviewLogs || []), newLogEntry];
+
+    await updateDoc(doc(db, "deadlines", d.id), { 
+      status: newS,
+      reviewLogs: updatedReviewLogs 
+    });
   };
 
   const toggleAdminTaskStatus = async (t: AdminTask) => {
@@ -4743,6 +4865,47 @@ export default function App() {
       await deleteDoc(doc(db, "adminTasks", id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, "adminTasks");
+    }
+  };
+
+  const handleAddAnnotation = async (deadlineId: string) => {
+    if (!newAnnotationText.trim() || !user) return;
+    setIsAddingAnnotation(true);
+    try {
+      const deadlineRef = doc(db, "deadlines", deadlineId);
+      const deadlineDoc = deadlines.find(d => d.id === deadlineId);
+      if (deadlineDoc) {
+        const newLogEntry: ReviewLogEntry = {
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          userId: user.uid,
+          userName: userProfile?.name || "Membro",
+          userRole: userProfile?.role || UserRole.LAWYER,
+          action: 'ANNOTATION',
+          observation: newAnnotationText.trim(),
+          timestamp: new Date().toISOString(),
+        };
+        const updatedLogs = [...(deadlineDoc.reviewLogs || []), newLogEntry];
+        await updateDoc(deadlineRef, {
+          reviewLogs: updatedLogs,
+        });
+        
+        if (selectedAppointment && selectedAppointment.type === "deadline" && (selectedAppointment.data as Deadline).id === deadlineId) {
+          setSelectedAppointment({
+            ...selectedAppointment,
+            data: {
+              ...deadlineDoc,
+              reviewLogs: updatedLogs
+            }
+          });
+        }
+        
+        setNewAnnotationText("");
+      }
+    } catch (err) {
+      console.error("Erro ao adicionar anotação:", err);
+      alert("Houve um erro ao salvar a anotação.");
+    } finally {
+      setIsAddingAnnotation(false);
     }
   };
 
@@ -9423,241 +9586,288 @@ service cloud.firestore {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      Informações Gerais
-                    </p>
-                    <div className="space-y-2.5">
-                      {selectedAppointment.type === "deadline" && (
-                        <>
-                          <div className="flex justify-between items-center py-1.5 border-b border-white">
-                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                              Cliente
-                            </span>
-                            <span className="text-xs font-black text-slate-900">
-                              {(selectedAppointment.data as Deadline).empresa}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-1.5 border-b border-white">
-                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                              Responsável
-                            </span>
-                            <span className="text-xs font-black text-slate-900">
-                              {
-                                (selectedAppointment.data as Deadline)
-                                  .responsavel
-                              }
-                            </span>
-                          </div>
-                          {(selectedAppointment.data as Deadline)
-                            .instituicao && (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col h-full justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        Informações Gerais
+                      </p>
+                      <div className="space-y-2.5">
+                        {selectedAppointment.type === "deadline" && (
+                          <>
                             <div className="flex justify-between items-center py-1.5 border-b border-white">
                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                Órgão
+                                Cliente
+                              </span>
+                              <span className="text-xs font-black text-slate-900">
+                                {(selectedAppointment.data as Deadline).empresa}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1.5 border-b border-white">
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                Responsável
                               </span>
                               <span className="text-xs font-black text-slate-900">
                                 {
                                   (selectedAppointment.data as Deadline)
-                                    .instituicao
+                                    .responsavel
                                 }
                               </span>
                             </div>
-                          )}
-                        </>
-                      )}
-                      {selectedAppointment.type === "task" && (
-                        <>
+                            {(selectedAppointment.data as Deadline)
+                              .instituicao && (
+                              <div className="flex justify-between items-center py-1.5 border-b border-white">
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                  Órgão
+                                </span>
+                                <span className="text-xs font-black text-slate-900">
+                                  {
+                                    (selectedAppointment.data as Deadline)
+                                      .instituicao
+                                  }
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {selectedAppointment.type === "task" && (
+                          <>
+                            <div className="flex justify-between items-center py-1.5 border-b border-white">
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                Categoria
+                              </span>
+                              <span className="text-xs font-black text-blue-600">
+                                {(selectedAppointment.data as AdminTask).category}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {(selectedAppointment.data as AdminTask | Deadline).assignedTo && (
                           <div className="flex justify-between items-center py-1.5 border-b border-white">
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                              Categoria
+                              Atribuído a
                             </span>
                             <span className="text-xs font-black text-blue-600">
-                              {(selectedAppointment.data as AdminTask).category}
+                              {teamProfiles.find(t => t.id === (selectedAppointment.data as AdminTask | Deadline).assignedTo)?.name || 
+                               (selectedAppointment.data.userId === user?.uid ? userProfile?.name || "Eu" : "Outro Usuário")}
                             </span>
                           </div>
-                        </>
-                      )}
-                      {(selectedAppointment.data as AdminTask | Deadline).assignedTo && (
+                        )}
                         <div className="flex justify-between items-center py-1.5 border-b border-white">
                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                            Atribuído a
+                            Data
                           </span>
-                          <span className="text-xs font-black text-blue-600">
-                            {teamProfiles.find(t => t.id === (selectedAppointment.data as AdminTask | Deadline).assignedTo)?.name || 
-                             (selectedAppointment.data.userId === user?.uid ? userProfile?.name || "Eu" : "Outro Usuário")}
+                          <span className="text-xs font-black text-slate-900">
+                            {formatLocalDate(
+                              selectedAppointment.type === "deadline"
+                                ? (selectedAppointment.data as Deadline).data
+                                : (selectedAppointment.data as AdminTask).date,
+                            )}
                           </span>
                         </div>
-                      )}
-                      <div className="flex justify-between items-center py-1.5 border-b border-white">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                          Data
-                        </span>
-                        <span className="text-xs font-black text-slate-900">
-                          {formatLocalDate(
-                            selectedAppointment.type === "deadline"
-                              ? (selectedAppointment.data as Deadline).data
-                              : (selectedAppointment.data as AdminTask).date,
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                          Horário
-                        </span>
-                        <span className="text-xs font-black text-slate-900">
-                          {(selectedAppointment.type === "deadline"
-                            ? (selectedAppointment.data as Deadline).hora
-                            : (selectedAppointment.data as AdminTask).time) ||
-                            "--:--"}
-                        </span>
+                        <div className="flex justify-between items-center py-1.5">
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                            Horário
+                          </span>
+                          <span className="text-xs font-black text-slate-900">
+                            {(selectedAppointment.type === "deadline"
+                              ? (selectedAppointment.data as Deadline).hora
+                              : (selectedAppointment.data as AdminTask).time) ||
+                              "--:--"}
+                          </span>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-200/60">
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                            Assunto / Descrição
+                          </span>
+                          <p className="text-[11px] font-medium text-slate-700 leading-relaxed italic whitespace-pre-wrap">
+                            {selectedAppointment.type === "deadline"
+                              ? (selectedAppointment.data as Deadline).assunto
+                              : (selectedAppointment.data as AdminTask).description ||
+                                "Nenhuma descrição fornecida."}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col h-full">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      Assunto / Descrição
-                    </p>
-                    <p className="text-[13px] font-medium text-slate-700 leading-relaxed italic border-l-4 border-slate-200 pl-3.5 py-1">
-                      {selectedAppointment.type === "deadline"
-                        ? (selectedAppointment.data as Deadline).assunto
-                        : (selectedAppointment.data as AdminTask).description ||
-                          "Nenhuma descrição fornecida."}
-                    </p>
 
                     {selectedAppointment.type === "deadline" &&
                       (selectedAppointment.data as Deadline).documentUrl && (
-                        <div className="mt-auto pt-4">
+                        <div className="pt-4 mt-auto">
                           <a
                             href={
                               (selectedAppointment.data as Deadline).documentUrl
                             }
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2.5 bg-blue-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-blue-500/10 hover:scale-[1.02] transition-all"
+                            className="flex items-center justify-center gap-2 bg-blue-600 text-white p-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-blue-500/10 hover:scale-[1.01] transition-all w-full text-center"
                           >
-                            <Icons.ExternalLink className="w-4 h-4" /> ACESSAR DOCUMENTO
+                            <Icons.ExternalLink className="w-3.5 h-3.5" /> ACESSAR DOCUMENTO
                           </a>
                         </div>
                       )}
                   </div>
                 </div>
-              </div>
 
-              {selectedAppointment.type === "deadline" && (selectedAppointment.data as Deadline).reviewLogs && (selectedAppointment.data as Deadline).reviewLogs!.length > 0 && (
-                <div className="pt-4 border-t border-slate-100">
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      Histórico de Atividades & Revisões
-                   </p>
-                   <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
-                      {((selectedAppointment.data as Deadline).reviewLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
-                         <div key={idx} className="flex flex-col gap-1 border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
-                            <div className="flex justify-between items-start">
-                               <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-black text-slate-800">{log.userName}</span>
-                                  <span className="text-[8px] font-extrabold uppercase text-white bg-slate-800 px-1.5 py-0.5 rounded">{log.userRole}</span>
+                <div className="space-y-3">
+                  {selectedAppointment.type === "deadline" ? (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col h-full justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                          Cronômetro de Atividade
+                        </p>
+                        {(() => {
+                           const d = selectedAppointment.data as Deadline;
+                           const activeTimer = activeTimers.find(t => t.deadlineId === d.id);
+                           const isPlaying = activeTimer?.isPlaying || false;
+                           const elapsed = activeTimer?.elapsedSeconds || 0;
+                           // Display dynamic elapsed time if playing
+                           let displayElapsed = elapsed;
+                           if (isPlaying && activeTimer?.lastStartedAt) {
+                              displayElapsed += (Date.now() - activeTimer.lastStartedAt) / 1000;
+                           }
+                           
+                           const hrs = Math.floor(displayElapsed / 3600);
+                           const mins = Math.floor((displayElapsed % 3600) / 60);
+                           const secs = Math.floor(displayElapsed % 60);
+                           const timeString = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+                           return (
+                             <div className="flex flex-col items-center gap-4 py-2">
+                               <div className="flex items-center justify-center gap-3">
+                                 <span className="font-mono text-3xl font-black text-slate-800 tracking-wider">
+                                    {timeString}
+                                 </span>
+                                 {isPlaying && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                                      <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Ativo</span>
+                                    </div>
+                                 )}
                                </div>
-                               <span className="text-[9px] font-bold text-slate-400">{new Date(log.timestamp).toLocaleString("pt-BR")}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 mt-0.5">
-                               {log.action === 'TIMER_SESSION' && <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Sessão Registrada</span>}
-                               {log.action === 'SUBMITTED_FOR_REVIEW' && <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">Enviado p/ Revisão</span>}
-                               {log.action === 'RETURNED' && <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Devolvido</span>}
-                               {log.action === 'SENT_TO_ADMIN' && <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Remetido Validação</span>}
-                               {log.action === 'ADMIN_APPROVED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Aprovado pelo Admin</span>}
-                               {log.action === 'COMPLETED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Concluído Definitivo</span>}
                                
-                               {typeof log.durationSeconds !== 'undefined' && log.durationSeconds > 0 && (
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                     <Icons.Clock className="w-2.5 h-2.5 inline mr-1" />
-                                     {Math.floor(log.durationSeconds / 3600).toString().padStart(2, "0")}:{Math.floor((log.durationSeconds % 3600) / 60).toString().padStart(2, "0")}:{Math.floor(log.durationSeconds % 60).toString().padStart(2, "0")}
-                                  </span>
-                               )}
-                            </div>
-                            
-                            {log.observation && (
-                               <p className="text-[11px] font-medium text-slate-600 italic bg-white p-2 rounded-xl border border-slate-100 mt-1">
-                                  {log.observation}
-                               </p>
-                            )}
-                         </div>
-                      ))}
-                   </div>
+                               <div className="flex items-center gap-2.5 w-full">
+                                  {!isPlaying ? (
+                                    <button 
+                                      onClick={() => handleStartTimerForDeadline(d)}
+                                      className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                      INICIAR
+                                    </button>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handlePauseTimer(d.id)}
+                                      className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/10 hover:bg-amber-600 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>
+                                      PAUSAR
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={() => {
+                                      handleStopTimer(d.id);
+                                      setIsDetailsModalOpen(false);
+                                    }}
+                                    disabled={!activeTimer}
+                                    className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl transition font-black text-[9px] uppercase tracking-widest ${activeTimer ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:scale-[1.01]" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
+                                   >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+                                    PARAR
+                                  </button>
+                               </div>
+                             </div>
+                           );
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col h-full">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        Assunto / Descrição
+                      </p>
+                      <p className="text-[13px] font-medium text-slate-700 leading-relaxed italic border-l-4 border-slate-200 pl-3.5 py-1">
+                        {(selectedAppointment.data as AdminTask).description ||
+                          "Nenhuma descrição fornecida."}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {selectedAppointment.type === "deadline" && (
                 <div className="pt-4 border-t border-slate-100">
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      Cronômetro de Atividade
-                   </p>
-                   {(() => {
-                      const d = selectedAppointment.data as Deadline;
-                      const activeTimer = activeTimers.find(t => t.deadlineId === d.id);
-                      const isPlaying = activeTimer?.isPlaying || false;
-                      const elapsed = activeTimer?.elapsedSeconds || 0;
-                      // Display dynamic elapsed time if playing
-                      let displayElapsed = elapsed;
-                      if (isPlaying && activeTimer?.lastStartedAt) {
-                         // We use the ticker to re-evaluate this block every second
-                         displayElapsed += (Date.now() - activeTimer.lastStartedAt) / 1000;
-                      }
-                      
-                      const hrs = Math.floor(displayElapsed / 3600);
-                      const mins = Math.floor((displayElapsed % 3600) / 60);
-                      const secs = Math.floor(displayElapsed % 60);
-                      const timeString = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-
-                      return (
-                        <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-2xl">
-                          <div className="flex-1 flex items-center justify-center gap-3">
-                            <span className="font-mono text-2xl font-black text-slate-800 tracking-wider">
-                               {timeString}
-                            </span>
-                            {isPlaying && (
-                               <div className="flex items-center gap-1.5">
-                                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                 <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider">Em andamento</span>
-                               </div>
+                   <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                      <div>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                            Histórico de Atividades & Revisões
+                         </p>
+                         <div className="space-y-3 overflow-y-auto max-h-[190px] pr-1 scrollbar-thin">
+                            {!(selectedAppointment.data as Deadline).reviewLogs || (selectedAppointment.data as Deadline).reviewLogs!.length === 0 ? (
+                               <p className="text-xs font-medium text-slate-400 py-1 italic">Nenhum evento registrado no histórico.</p>
+                            ) : (
+                               compileReviewLogs((selectedAppointment.data as Deadline).reviewLogs || []).map((log, idx) => (
+                                  <div key={idx} className="flex flex-col gap-1 border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
+                                     <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-1.5">
+                                           <span className="text-xs font-black text-slate-800">{log.userName}</span>
+                                           <span className="text-[8px] font-extrabold uppercase text-white bg-slate-800 px-1.5 py-0.5 rounded">{log.userRole || 'ADVOGADO'}</span>
+                                        </div>
+                                        <span className="text-[9px] font-bold text-slate-400">{new Date(log.timestamp).toLocaleString("pt-BR")}</span>
+                                     </div>
+                                     
+                                     <div className="flex items-center gap-2 mt-0.5">
+                                        {log.action === 'TIMER_SESSION' && <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Sessão Registrada</span>}
+                                        {log.action === 'SUBMITTED_FOR_REVIEW' && <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">Enviado p/ Revisão</span>}
+                                        {log.action === 'RETURNED' && <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Devolvido</span>}
+                                        {log.action === 'SENT_TO_ADMIN' && <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Remetido Validação</span>}
+                                        {log.action === 'ADMIN_APPROVED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Aprovado pelo Admin</span>}
+                                        {log.action === 'COMPLETED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Concluído Definitivo</span>}
+                                        {log.action === 'CREATE' && <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 bg-teal-100 px-2 py-0.5 rounded-full">Cadastro</span>}
+                                        {log.action === 'EDIT' && <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">Alteração</span>}
+                                        {log.action === 'ANNOTATION' && <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">Anotação</span>}
+                                        
+                                        {typeof log.durationSeconds !== 'undefined' && log.durationSeconds > 0 && (
+                                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                              <Icons.Clock className="w-2.5 h-2.5 inline mr-1" />
+                                              {Math.floor(log.durationSeconds / 3600).toString().padStart(2, "0")}:{Math.floor((log.durationSeconds % 3600) / 60).toString().padStart(2, "0")}:{Math.floor(log.durationSeconds % 60).toString().padStart(2, "0")}
+                                           </span>
+                                        )}
+                                     </div>
+                                     
+                                     {log.observation && (
+                                        <p className="text-[11px] font-medium text-slate-600 italic bg-white p-2 rounded-xl border border-slate-100 mt-1 whitespace-pre-wrap">
+                                           {log.observation}
+                                        </p>
+                                     )}
+                                  </div>
+                               ))
                             )}
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                             {!isPlaying ? (
-                               <button 
-                                 onClick={() => handleStartTimerForDeadline(d)}
-                                 className="w-12 h-12 flex items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition"
-                                 title="Iniciar / Retomar Cronômetro"
-                               >
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                               </button>
-                             ) : (
-                               <button 
-                                 onClick={() => handlePauseTimer(d.id)}
-                                 className="w-12 h-12 flex items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/20 hover:bg-amber-600 transition"
-                                 title="Pausar Cronômetro"
-                               >
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>
-                               </button>
-                             )}
-                             <button 
-                               onClick={() => {
-                                 handleStopTimer(d.id);
-                                 setIsDetailsModalOpen(false); // Fechar detalhes ao ir para o modal de salvar
-                               }}
-                               disabled={!activeTimer}
-                               className={`w-12 h-12 flex items-center justify-center rounded-xl transition ${activeTimer ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
-                               title="Parar e Salvar Registro"
-                             >
-                               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
-                             </button>
-                          </div>
-                        </div>
-                      );
-                   })()}
+                         </div>
+                      </div>
+
+                      {/* Nova Anotação Form */}
+                      <div className="mt-4 pt-3 border-t border-slate-200/60 font-sans">
+                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                            Nova Anotação
+                         </label>
+                         <div className="flex flex-col sm:flex-row gap-2">
+                            <textarea
+                               value={newAnnotationText}
+                               onChange={(e) => setNewAnnotationText(e.target.value)}
+                               placeholder="Nova anotação..."
+                               rows={1}
+                               className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none focus:ring-4 focus:ring-blue-100 placeholder-slate-400 font-medium resize-none transition animate-none"
+                            />
+                            <button
+                               onClick={() => handleAddAnnotation((selectedAppointment.data as Deadline).id)}
+                               disabled={!newAnnotationText.trim() || isAddingAnnotation}
+                               className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/15 hover:bg-purple-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none transition flex items-center justify-center self-end"
+                            >
+                               {isAddingAnnotation ? "..." : "Salvar"}
+                            </button>
+                         </div>
+                      </div>
+                   </div>
                 </div>
               )}
 
