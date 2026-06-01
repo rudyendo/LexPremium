@@ -3119,9 +3119,10 @@ export default function App() {
         const total = deadlines.filter((d) => {
           if (d.status !== DeadlineStatus.COMPLETED || d.responsavel !== name)
             return false;
-          const dDate = new Date(d.data);
+          if (!d.data) return false;
+          const [y, m] = d.data.split("-").map(Number);
           return (
-            dDate.getMonth() === curMonth && dDate.getFullYear() === curYear
+            y === curYear && (m - 1) === curMonth
           );
         }).length;
         return { name, total };
