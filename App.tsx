@@ -7034,7 +7034,7 @@ service cloud.firestore {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+                <div className="grid grid-cols-1 gap-6 w-full">
                   <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/10 backdrop-blur-sm">
                     <div className="flex justify-between items-center mb-6">
                       <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
