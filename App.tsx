@@ -26,7 +26,7 @@ import {
   TimeLog,
   TimeLogStatus,
   ReviewState,
-  ReviewLogEntry
+  ReviewLogEntry,
 } from "./types";
 import {
   Icons,
@@ -97,16 +97,18 @@ const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const getParties = (h: any) => {
   const raw = getRawParties(h);
   return raw
-    .map((p: any) => (
-      p.nome || 
-      p.nomePersonagem || 
-      p.pessoa?.nome || 
-      p.nome_pessoa || 
-      p.nome_parte || 
-      p.nome_completo ||
-      p.nomeOriginal ||
-      (typeof p === 'string' ? p : "")
-    ).toUpperCase())
+    .map((p: any) =>
+      (
+        p.nome ||
+        p.nomePersonagem ||
+        p.pessoa?.nome ||
+        p.nome_pessoa ||
+        p.nome_parte ||
+        p.nome_completo ||
+        p.nomeOriginal ||
+        (typeof p === "string" ? p : "")
+      ).toUpperCase(),
+    )
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
 };
@@ -122,32 +124,35 @@ const getRawParties = (h: any) => {
     ...(h.partes?.poloAtivo || []),
     ...(h.partes?.poloPassivo || []),
     ...(h.assuntos || []),
-    ...(Array.isArray(h.partes) ? h.partes : [])
+    ...(Array.isArray(h.partes) ? h.partes : []),
   ];
 };
 
 // --- Utilitários ---
 const compileReviewLogs = (logs: ReviewLogEntry[]): ReviewLogEntry[] => {
   if (!logs || logs.length === 0) return [];
-  
+
   // Sort logs by timestamp ascending
-  const sorted = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const sorted = [...logs].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
   const compiled: ReviewLogEntry[] = [];
-  
+
   for (const log of sorted) {
     if (compiled.length === 0) {
       compiled.push({ ...log });
       continue;
     }
-    
+
     const last = compiled[compiled.length - 1];
     const lastTime = new Date(last.timestamp);
     const currTime = new Date(log.timestamp);
-    
+
     // Group if made by same user AND within same minute (less than 60s) AND same action type (e.g. EDIT)
     const isSameUser = last.userId === log.userId;
-    const timeDiffSeconds = Math.abs(currTime.getTime() - lastTime.getTime()) / 1000;
-    
+    const timeDiffSeconds =
+      Math.abs(currTime.getTime() - lastTime.getTime()) / 1000;
+
     if (isSameUser && timeDiffSeconds <= 60 && last.action === log.action) {
       if (log.observation) {
         if (last.observation) {
@@ -159,14 +164,15 @@ const compileReviewLogs = (logs: ReviewLogEntry[]): ReviewLogEntry[] => {
           last.observation = log.observation;
         }
       }
-      if (typeof log.durationSeconds !== 'undefined') {
-        last.durationSeconds = (last.durationSeconds || 0) + log.durationSeconds;
+      if (typeof log.durationSeconds !== "undefined") {
+        last.durationSeconds =
+          (last.durationSeconds || 0) + log.durationSeconds;
       }
     } else {
       compiled.push({ ...log });
     }
   }
-  
+
   return compiled;
 };
 
@@ -247,7 +253,7 @@ interface FirestoreErrorInfo {
 function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
-  path: string | null
+  path: string | null,
 ) {
   const errMessage = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
@@ -267,12 +273,12 @@ function handleFirestoreError(
     operationType,
     path,
   };
-  
+
   // Log safely without complex JSON.stringify that might hit circularity in some environments
   console.error("Firestore Error:", errMessage, {
     operation: operationType,
     path: path,
-    userId: auth?.currentUser?.uid || null
+    userId: auth?.currentUser?.uid || null,
   });
 
   let serializedErr: string;
@@ -295,7 +301,7 @@ function handleFirestoreError(
       authInfo: {
         userId: auth?.currentUser?.uid || null,
         email: auth?.currentUser?.email || null,
-      }
+      },
     });
   }
 
@@ -362,7 +368,7 @@ const AuthScreen = ({
             {/* Background geometric pattern */}
             <div className="absolute inset-0 bg-blue-600/10 rounded-2xl border border-blue-500/20 rotate-45 transition-transform duration-700 group-hover:rotate-90" />
             <div className="absolute inset-1 bg-[#0b1329] rounded-2xl border border-white/5" />
-            
+
             {/* Shield / Scale Geometric Monogram */}
             <svg
               className="w-8 h-8 text-blue-400 relative z-10 transition-transform duration-300 group-hover:scale-105"
@@ -400,7 +406,8 @@ const AuthScreen = ({
             Portal Corporativo Autorizado
           </h3>
           <p className="text-slate-400 text-xs leading-relaxed max-w-[280px] mx-auto font-normal">
-            Autentique-se com sua conta corporativa institucional Google para acessar o ecossistema estratégico.
+            Autentique-se com sua conta corporativa institucional Google para
+            acessar o ecossistema estratégico.
           </p>
         </div>
 
@@ -462,7 +469,8 @@ const AuthScreen = ({
             Ambiente Conectado Seguro
           </div>
           <p className="text-[10px] text-slate-500 max-w-[240px] leading-relaxed">
-            Este painel utiliza protocolos de segurança SSL/TLS avançados e autenticação única (SSO) do Google.
+            Este painel utiliza protocolos de segurança SSL/TLS avançados e
+            autenticação única (SSO) do Google.
           </p>
         </div>
       </div>
@@ -521,21 +529,28 @@ const MonitoringView = ({
     if (!teamProfiles || teamProfiles.length === 0) return text;
 
     const names = teamProfiles
-      .map(p => p.name?.trim())
+      .map((p) => p.name?.trim())
       .filter((n): n is string => !!n && n.length > 2)
       .sort((a, b) => b.length - a.length);
 
     if (names.length === 0) return text;
 
-    const escapedNames = names.map(name => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
-    const pattern = new RegExp(`\\b(${escapedNames.join('|')})\\b`, 'gi');
+    const escapedNames = names.map((name) =>
+      name.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"),
+    );
+    const pattern = new RegExp(`\\b(${escapedNames.join("|")})\\b`, "gi");
 
     const parts = text.split(pattern);
     return parts.map((part, index) => {
-      const isMatch = names.some(name => name.toLowerCase() === part.toLowerCase());
+      const isMatch = names.some(
+        (name) => name.toLowerCase() === part.toLowerCase(),
+      );
       if (isMatch) {
         return (
-          <span key={index} className="bg-yellow-100 text-amber-900 font-extrabold px-1.5 py-0.5 rounded-md border border-yellow-250 inline-block text-[10px]">
+          <span
+            key={index}
+            className="bg-yellow-100 text-amber-900 font-extrabold px-1.5 py-0.5 rounded-md border border-yellow-250 inline-block text-[10px]"
+          >
             {part}
           </span>
         );
@@ -546,12 +561,15 @@ const MonitoringView = ({
 
   const [activeTab, setActiveTab] = useState<"processes" | "djen">("processes");
   const [isEditing, setIsEditing] = useState(false);
-  const [editingProcess, setEditingProcess] = useState<MonitoredProcess | null>(null);
+  const [editingProcess, setEditingProcess] = useState<MonitoredProcess | null>(
+    null,
+  );
   const [newCnj, setNewCnj] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [editClientName, setEditClientName] = useState("");
   const [editClientId, setEditClientId] = useState("");
-  const [selectedProcess, setSelectedProcess] = useState<MonitoredProcess | null>(null);
+  const [selectedProcess, setSelectedProcess] =
+    useState<MonitoredProcess | null>(null);
 
   // States for OAB setups
   const [userOab, setUserOab] = useState(userProfile?.oab || "");
@@ -562,7 +580,8 @@ const MonitoringView = ({
   const [isFetchingDjen, setIsFetchingDjen] = useState(false);
   const [showOabSettings, setShowOabSettings] = useState(false);
   const [djenSearchQuery, setDjenSearchQuery] = useState("");
-  const [selectedDjenPub, setSelectedDjenPub] = useState<DjenPublication | null>(null);
+  const [selectedDjenPub, setSelectedDjenPub] =
+    useState<DjenPublication | null>(null);
 
   const handleSelectDjenPub = (pub: DjenPublication | null) => {
     setSelectedDjenPub(pub);
@@ -573,7 +592,7 @@ const MonitoringView = ({
 
   useEffect(() => {
     if (selectedDjenPub) {
-      const currentPub = publications.find(p => p.id === selectedDjenPub.id);
+      const currentPub = publications.find((p) => p.id === selectedDjenPub.id);
       if (currentPub) {
         if (
           currentPub.isRead !== selectedDjenPub.isRead ||
@@ -598,7 +617,7 @@ const MonitoringView = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
-      setToastMessage(prev => prev === msg ? null : prev);
+      setToastMessage((prev) => (prev === msg ? null : prev));
     }, 4000);
   };
 
@@ -608,11 +627,19 @@ const MonitoringView = ({
         const docRef = doc(db, "publications", id);
         await updateDoc(docRef, { isRead });
       }
-      showToast(isRead ? "A publicação foi marcada como lida!" : "A publicação foi marcada como não lida!");
+      showToast(
+        isRead
+          ? "A publicação foi marcada como lida!"
+          : "A publicação foi marcada como não lida!",
+      );
       setSelectedPubIds([]);
     } catch (err: any) {
       console.error("Error marking as read:", err);
-      handleFirestoreError(err, OperationType.UPDATE, `publications/${ids.join(",")}`);
+      handleFirestoreError(
+        err,
+        OperationType.UPDATE,
+        `publications/${ids.join(",")}`,
+      );
     }
   };
 
@@ -622,19 +649,34 @@ const MonitoringView = ({
         const docRef = doc(db, "publications", id);
         await updateDoc(docRef, { isInTrash });
       }
-      showToast(isInTrash ? "Publicação movida para a lixeira!" : "Publicação restaurada da lixeira!");
+      showToast(
+        isInTrash
+          ? "Publicação movida para a lixeira!"
+          : "Publicação restaurada da lixeira!",
+      );
       setSelectedPubIds([]);
       if (selectedDjenPub && ids.includes(selectedDjenPub.id)) {
         setSelectedDjenPub(null);
       }
     } catch (err: any) {
       console.error("Error moving to trash:", err);
-      handleFirestoreError(err, OperationType.UPDATE, `publications/${ids.join(",")}`);
+      handleFirestoreError(
+        err,
+        OperationType.UPDATE,
+        `publications/${ids.join(",")}`,
+      );
     }
   };
 
   const handlePermanentDelete = async (ids: string[]) => {
-    if (!window.confirm("Deseja realmente excluir permanentemente as " + ids.length + " publicações selecionadas?")) return;
+    if (
+      !window.confirm(
+        "Deseja realmente excluir permanentemente as " +
+          ids.length +
+          " publicações selecionadas?",
+      )
+    )
+      return;
     try {
       for (const id of ids) {
         const docRef = doc(db, "publications", id);
@@ -647,7 +689,11 @@ const MonitoringView = ({
       }
     } catch (err: any) {
       console.error("Error deleting permanently:", err);
-      handleFirestoreError(err, OperationType.DELETE, `publications/${ids.join(",")}`);
+      handleFirestoreError(
+        err,
+        OperationType.DELETE,
+        `publications/${ids.join(",")}`,
+      );
     }
   };
 
@@ -688,9 +734,12 @@ const MonitoringView = ({
 
   const handleDownloadPub = (pub: DjenPublication) => {
     const element = document.createElement("a");
-    const file = new Blob([
-      `PROCESSO: ${pub.numeroProcesso}\nTRIBUNAL: ${pub.tribunal}\nDISPONIBILIZAÇÃO: ${pub.dataDisponibilizacao}\n-----------------------------------\n\n${pub.texto}`
-    ], {type: 'text/plain'});
+    const file = new Blob(
+      [
+        `PROCESSO: ${pub.numeroProcesso}\nTRIBUNAL: ${pub.tribunal}\nDISPONIBILIZAÇÃO: ${pub.dataDisponibilizacao}\n-----------------------------------\n\n${pub.texto}`,
+      ],
+      { type: "text/plain" },
+    );
     element.href = URL.createObjectURL(file);
     element.download = `${pub.numeroProcesso || "publicacao"}.txt`;
     document.body.appendChild(element);
@@ -700,8 +749,12 @@ const MonitoringView = ({
   };
 
   const handleSendEmailPub = (pub: DjenPublication) => {
-    const subject = encodeURIComponent(`Publicação Processual - Proc ${pub.numeroProcesso}`);
-    const body = encodeURIComponent(`Prezado(a),\n\nSegue abaixo o teor da publicação encontrada no DJEN:\n\nTribunal: ${pub.tribunal}\nProcesso: ${pub.numeroProcesso}\nData: ${new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR")}\n\nTeor:\n\n${pub.texto}\n\nJurisControl.`);
+    const subject = encodeURIComponent(
+      `Publicação Processual - Proc ${pub.numeroProcesso}`,
+    );
+    const body = encodeURIComponent(
+      `Prezado(a),\n\nSegue abaixo o teor da publicação encontrada no DJEN:\n\nTribunal: ${pub.tribunal}\nProcesso: ${pub.numeroProcesso}\nData: ${new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR")}\n\nTeor:\n\n${pub.texto}\n\nJurisControl.`,
+    );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
     showToast("Disparando cliente de e-mail local...");
   };
@@ -716,8 +769,33 @@ const MonitoringView = ({
   }, [userProfile]);
 
   const rawUfs = [
-    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", 
-    "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
+    "AC",
+    "AL",
+    "AM",
+    "AP",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MG",
+    "MS",
+    "MT",
+    "PA",
+    "PB",
+    "PE",
+    "PI",
+    "PR",
+    "RJ",
+    "RN",
+    "RO",
+    "RR",
+    "RS",
+    "SC",
+    "SE",
+    "SP",
+    "TO",
   ];
 
   const handleEdit = (proc: MonitoredProcess) => {
@@ -732,7 +810,7 @@ const MonitoringView = ({
     const updated = {
       ...editingProcess,
       clientName: editClientName,
-      clientId: editClientId || undefined
+      clientId: editClientId || undefined,
     };
     onUpdate(updated);
     setIsEditing(false);
@@ -751,14 +829,14 @@ const MonitoringView = ({
         oab: userOab,
         ufOab: userUf,
         adminOab: advAdminOab,
-        adminUfOab: advAdminUf
+        adminUfOab: advAdminUf,
       });
       setUserProfile({
         ...userProfile,
         oab: userOab,
         ufOab: userUf,
         adminOab: advAdminOab,
-        adminUfOab: advAdminUf
+        adminUfOab: advAdminUf,
       });
       alert("Configuração de OABs salva com sucesso!");
       setShowOabSettings(false);
@@ -773,7 +851,9 @@ const MonitoringView = ({
   const handleSyncDjen = async () => {
     if (!userProfile) return;
     if (!userOab) {
-      alert("Adicione e salve o seu número da OAB principal para realizar a busca.");
+      alert(
+        "Adicione e salve o seu número da OAB principal para realizar a busca.",
+      );
       setShowOabSettings(true);
       return;
     }
@@ -817,25 +897,34 @@ const MonitoringView = ({
 
         // Try direct browser client-side request first (bypasses WAF datacenter IP blocks!)
         try {
-          console.log(`[DJEN] Initiating direct client-side search: ${directUrl}`);
+          console.log(
+            `[DJEN] Initiating direct client-side search: ${directUrl}`,
+          );
           const clientResponse = await fetch(directUrl, {
             method: "GET",
             headers: {
-              "Accept": "application/json"
-            }
+              Accept: "application/json",
+            },
           });
 
           if (clientResponse.ok) {
             data = await clientResponse.json();
             success = true;
-            console.log(`[DJEN] Direct client-side fetch succeeded with ${data.items?.length || 0} items!`);
+            console.log(
+              `[DJEN] Direct client-side fetch succeeded with ${data.items?.length || 0} items!`,
+            );
           } else {
             responseStatusText = `HTTP ${clientResponse.status}`;
-            console.warn(`[DJEN] Direct client-side fetch failed (${responseStatusText}). Falling back to backend...`);
+            console.warn(
+              `[DJEN] Direct client-side fetch failed (${responseStatusText}). Falling back to backend...`,
+            );
           }
         } catch (clientErr: any) {
-          responseStatusText = clientErr?.message || "Erro de conexão do cliente (CORS ou Rede)";
-          console.warn(`[DJEN] Direct client-side fetch exception: ${responseStatusText}. Falling back to backend...`);
+          responseStatusText =
+            clientErr?.message || "Erro de conexão do cliente (CORS ou Rede)";
+          console.warn(
+            `[DJEN] Direct client-side fetch exception: ${responseStatusText}. Falling back to backend...`,
+          );
         }
 
         // Fallback to Server Proxy if client-side request failed
@@ -848,24 +937,32 @@ const MonitoringView = ({
               numeroOab: cleanOabDigits,
               ufOab: cleanUfLower,
               dataInicio: queryDataInicio,
-              dataFim: queryDataFim
-            })
+              dataFim: queryDataFim,
+            }),
           });
 
           try {
-            if (serverResponse.headers.get("Content-Type")?.includes("application/json")) {
+            if (
+              serverResponse.headers
+                .get("Content-Type")
+                ?.includes("application/json")
+            ) {
               data = await serverResponse.json();
             } else {
               const rawText = await serverResponse.text();
               data = { error: rawText || `Erro HTTP ${serverResponse.status}` };
             }
           } catch (jsonErr) {
-            data = { error: `Erro de formato de resposta inválido do servidor (HTTP ${serverResponse.status})` };
+            data = {
+              error: `Erro de formato de resposta inválido do servidor (HTTP ${serverResponse.status})`,
+            };
           }
 
           if (!serverResponse.ok) {
             console.error("[DJEN Proxy] Server response err:", data.error);
-            errors.push(`OAB ${config.oab}/${config.uf.toUpperCase()}: ${data.error || "Erro na consulta"}. (Tentativa direta: ${responseStatusText})`);
+            errors.push(
+              `OAB ${config.oab}/${config.uf.toUpperCase()}: ${data.error || "Erro na consulta"}. (Tentativa direta: ${responseStatusText})`,
+            );
             continue;
           }
         }
@@ -875,12 +972,22 @@ const MonitoringView = ({
 
         for (const rawItem of items) {
           // Robust mapping of properties & clean ID sanitization (removes slashes which break path hierarchy)
-          const rawId = String(rawItem.id || rawItem.idComunicacao || `pub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+          const rawId = String(
+            rawItem.id ||
+              rawItem.idComunicacao ||
+              `pub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          );
           const sanitizedId = rawId.replace(/[^a-zA-Z0-9_\-]/g, "-");
-          
-          const safeOfficeId = userProfile.officeId || userProfile.id || auth.currentUser?.uid || "";
+
+          const safeOfficeId =
+            userProfile.officeId ||
+            userProfile.id ||
+            auth.currentUser?.uid ||
+            "";
           if (!safeOfficeId) {
-            console.warn("[DJEN Sync] Skipped item due to empty office ID context.");
+            console.warn(
+              "[DJEN Sync] Skipped item due to empty office ID context.",
+            );
             continue;
           }
 
@@ -888,39 +995,65 @@ const MonitoringView = ({
 
           const mappedDoc: DjenPublication = {
             id: publicationId,
-            numeroProcesso: rawItem.numeroProcesso || rawItem.numero_processo || "",
-            dataDisponibilizacao: rawItem.dataDisponibilizacao || rawItem.data_disponibilizacao || "",
-            dataPublicacao: rawItem.data_publicacao || rawItem.dataPublicacao || "",
-            tribunal: rawItem.siglaTribunal || rawItem.nomeTribunal || rawItem.tribunal || "",
+            numeroProcesso:
+              rawItem.numeroProcesso || rawItem.numero_processo || "",
+            dataDisponibilizacao:
+              rawItem.dataDisponibilizacao ||
+              rawItem.data_disponibilizacao ||
+              "",
+            dataPublicacao:
+              rawItem.data_publicacao || rawItem.dataPublicacao || "",
+            tribunal:
+              rawItem.siglaTribunal ||
+              rawItem.nomeTribunal ||
+              rawItem.tribunal ||
+              "",
             texto: rawItem.texto || "",
-            tipoComunicacao: rawItem.tipoComunicacao || rawItem.tipo_comunicacao || "",
+            tipoComunicacao:
+              rawItem.tipoComunicacao || rawItem.tipo_comunicacao || "",
             destinatarios: rawItem.destinatarios || [],
-            meio: rawItem.meio || "Diário de Justiça Eletrônico Nacional (DJEN)",
+            meio:
+              rawItem.meio || "Diário de Justiça Eletrônico Nacional (DJEN)",
             officeId: safeOfficeId,
             searchOab: config.oab,
             searchUfOab: config.uf,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
           };
 
           // Overwrite/de-duplicate in Firestore using publication API identifier with { merge: true } to retain local user fields (e.g. read/unread, trash states)
           try {
-            await setDoc(doc(db, "publications", publicationId), mappedDoc, { merge: true });
+            await setDoc(doc(db, "publications", publicationId), mappedDoc, {
+              merge: true,
+            });
             successfullyFetched++;
           } catch (writeErr: any) {
-            console.error(`[DJEN Sync] Error writing doc ${publicationId} to Firestore:`, writeErr);
-            handleFirestoreError(writeErr, OperationType.WRITE, `publications/${publicationId}`);
+            console.error(
+              `[DJEN Sync] Error writing doc ${publicationId} to Firestore:`,
+              writeErr,
+            );
+            handleFirestoreError(
+              writeErr,
+              OperationType.WRITE,
+              `publications/${publicationId}`,
+            );
           }
         }
       }
 
       if (errors.length > 0) {
-        alert(`Não foi possível sincronizar todas as OABs devido a bloqueios do servidor público:\n\n${errors.join("\n")}`);
+        alert(
+          `Não foi possível sincronizar todas as OABs devido a bloqueios do servidor público:\n\n${errors.join("\n")}`,
+        );
       } else {
-        alert(`Sincronização concluída! ${successfullyFetched} publicações processadas e armazenadas com sucesso.`);
+        alert(
+          `Sincronização concluída! ${successfullyFetched} publicações processadas e armazenadas com sucesso.`,
+        );
       }
     } catch (e: any) {
       console.error("[DJEN Sync Hook Fail]:", e);
-      alert("Falha ao comunicar com os servidores do DJEN nacional. Tente novamente mais tarde.");
+      alert(
+        "Falha ao comunicar com os servidores do DJEN nacional. Tente novamente mais tarde.",
+      );
     } finally {
       setIsFetchingDjen(false);
     }
@@ -944,8 +1077,10 @@ const MonitoringView = ({
         let matchesUser = false;
         if (myOabClean) {
           const hasMyOabInText = rawText.includes(myOabClean);
-          const hasMyOabInDest = (pub.destinatarios || []).some((d: any) => 
-            String(d.oab || "").replace(/\D/g, "").includes(myOabClean)
+          const hasMyOabInDest = (pub.destinatarios || []).some((d: any) =>
+            String(d.oab || "")
+              .replace(/\D/g, "")
+              .includes(myOabClean),
           );
           const matchesSearchOab = pub.searchOab === userProfile.oab;
           matchesUser = hasMyOabInText || hasMyOabInDest || matchesSearchOab;
@@ -955,11 +1090,14 @@ const MonitoringView = ({
         let matchesBoss = false;
         if (bossOabClean) {
           const hasBossOabInText = rawText.includes(bossOabClean);
-          const hasBossOabInDest = (pub.destinatarios || []).some((d: any) => 
-            String(d.oab || "").replace(/\D/g, "").includes(bossOabClean)
+          const hasBossOabInDest = (pub.destinatarios || []).some((d: any) =>
+            String(d.oab || "")
+              .replace(/\D/g, "")
+              .includes(bossOabClean),
           );
           const matchesSearchOab = pub.searchOab === userProfile.adminOab;
-          matchesBoss = hasBossOabInText || hasBossOabInDest || matchesSearchOab;
+          matchesBoss =
+            hasBossOabInText || hasBossOabInDest || matchesSearchOab;
         }
 
         // Return true if it matches either configured OAB
@@ -976,30 +1114,38 @@ const MonitoringView = ({
       // Admin sees everything mapped, matching or general searched
       const myOabStr = userProfile.oab || "";
       if (myOabStr) {
-        filtered = publications.filter(pub => pub.searchOab === myOabStr || pub.texto.includes(myOabStr.replace(/\D/g, "")));
+        filtered = publications.filter(
+          (pub) =>
+            pub.searchOab === myOabStr ||
+            pub.texto.includes(myOabStr.replace(/\D/g, "")),
+        );
       }
     }
 
     // Advise Hub Filter: Status Filter (Active, Unread, Read, Trash)
     if (djenStatusFilter === "TRASH") {
-      filtered = filtered.filter(pub => pub.isInTrash === true);
+      filtered = filtered.filter((pub) => pub.isInTrash === true);
     } else if (djenStatusFilter === "UNREAD") {
-      filtered = filtered.filter(pub => !pub.isInTrash && !pub.isRead);
+      filtered = filtered.filter((pub) => !pub.isInTrash && !pub.isRead);
     } else if (djenStatusFilter === "READ") {
-      filtered = filtered.filter(pub => !pub.isInTrash && pub.isRead === true);
+      filtered = filtered.filter(
+        (pub) => !pub.isInTrash && pub.isRead === true,
+      );
     } else {
       // ACTIVE - shows both read and unread, but not in trash
-      filtered = filtered.filter(pub => !pub.isInTrash);
+      filtered = filtered.filter((pub) => !pub.isInTrash);
     }
 
     // Advise Hub Filter: Journal (Tribunal) Filter
     if (djenJournalFilter !== "ALL") {
-      filtered = filtered.filter(pub => pub.tribunal === djenJournalFilter);
+      filtered = filtered.filter((pub) => pub.tribunal === djenJournalFilter);
     }
 
     // Advise Hub Filter: Notebook (Caderno / Tipo de ato) Filter
     if (djenNotebookFilter !== "ALL") {
-      filtered = filtered.filter(pub => pub.tipoComunicacao === djenNotebookFilter);
+      filtered = filtered.filter(
+        (pub) => pub.tipoComunicacao === djenNotebookFilter,
+      );
     }
 
     // Advise Hub Filter: Period Filter
@@ -1007,8 +1153,10 @@ const MonitoringView = ({
       const days = parseInt(djenPeriodFilter, 10);
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      filtered = filtered.filter(pub => {
-        const pubDate = new Date(pub.dataDisponibilizacao || pub.createdAt || 0);
+      filtered = filtered.filter((pub) => {
+        const pubDate = new Date(
+          pub.dataDisponibilizacao || pub.createdAt || 0,
+        );
         return pubDate >= cutoffDate;
       });
     }
@@ -1021,19 +1169,19 @@ const MonitoringView = ({
           p.numeroProcesso.includes(criteria) ||
           p.tribunal.toLowerCase().includes(criteria) ||
           p.texto.toLowerCase().includes(criteria) ||
-          p.tipoComunicacao.toLowerCase().includes(criteria)
+          p.tipoComunicacao.toLowerCase().includes(criteria),
       );
     }
 
     return filtered;
   }, [
-    publications, 
-    userProfile, 
-    djenSearchQuery, 
-    djenStatusFilter, 
-    djenJournalFilter, 
-    djenNotebookFilter, 
-    djenPeriodFilter
+    publications,
+    userProfile,
+    djenSearchQuery,
+    djenStatusFilter,
+    djenJournalFilter,
+    djenNotebookFilter,
+    djenPeriodFilter,
   ]);
 
   const getGrauDisplay = (grau: string) => {
@@ -1042,11 +1190,22 @@ const MonitoringView = ({
       val = val.substring(1);
     }
 
-    if (val === "1") return { label: "1º Grau", color: "text-emerald-600 bg-emerald-50" };
-    if (val === "2") return { label: "2º Grau", color: "text-blue-600 bg-blue-50" };
-    if (val === "JE" || val.includes("JUIZADO")) return { label: "Juizado Especial", color: "text-purple-600 bg-purple-50" };
-    if (val === "TR" || val.includes("TURMA")) return { label: "Turma Recursal", color: "text-amber-600 bg-amber-50" };
-    if (val) return { label: `${val}${val.length === 1 ? 'º' : ''} Grau`, color: "text-slate-600 bg-slate-50" };
+    if (val === "1")
+      return { label: "1º Grau", color: "text-emerald-600 bg-emerald-50" };
+    if (val === "2")
+      return { label: "2º Grau", color: "text-blue-600 bg-blue-50" };
+    if (val === "JE" || val.includes("JUIZADO"))
+      return {
+        label: "Juizado Especial",
+        color: "text-purple-600 bg-purple-50",
+      };
+    if (val === "TR" || val.includes("TURMA"))
+      return { label: "Turma Recursal", color: "text-amber-600 bg-amber-50" };
+    if (val)
+      return {
+        label: `${val}${val.length === 1 ? "º" : ""} Grau`,
+        color: "text-slate-600 bg-slate-50",
+      };
     return null;
   };
 
@@ -1084,7 +1243,9 @@ const MonitoringView = ({
               </div>
             ) : (
               processes.map((proc) => {
-                const linkedClient = clients.find(c => c.id === proc.clientId);
+                const linkedClient = clients.find(
+                  (c) => c.id === proc.clientId,
+                );
                 return (
                   <div
                     key={proc.id}
@@ -1092,7 +1253,12 @@ const MonitoringView = ({
                     className={`w-full p-2.5 rounded-lg border-2 text-left transition-all relative overflow-hidden group cursor-pointer ${selectedProcess?.id === proc.id ? "bg-blue-50 border-blue-600 shadow-lg shadow-blue-600/5" : "bg-white border-slate-100 hover:border-slate-300"}`}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedProcess(proc); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedProcess(proc);
+                      }
+                    }}
                   >
                     <div className="flex justify-between items-start mb-1.5">
                       <div className="flex flex-wrap gap-1">
@@ -1100,36 +1266,49 @@ const MonitoringView = ({
                           {proc.court}
                         </span>
                         {getGrauDisplay(proc.grau || "") && (
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${getGrauDisplay(proc.grau || "")?.color}`}>
+                          <span
+                            className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${getGrauDisplay(proc.grau || "")?.color}`}
+                          >
                             {getGrauDisplay(proc.grau || "")?.label}
                           </span>
                         )}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                           onClick={(e) => { e.stopPropagation(); onRefresh(proc); }}
-                           className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-                           title="Atualizar agora"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRefresh(proc);
+                          }}
+                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                          title="Atualizar agora"
                         >
                           <Icons.RefreshCcw className="w-3.5 h-3.5" />
                         </button>
-                        <button 
-                           onClick={(e) => { e.stopPropagation(); handleEdit(proc); }}
-                           className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                           title="Editar"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(proc);
+                          }}
+                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                          title="Editar"
                         >
                           <Icons.Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button 
-                           onClick={(e) => { e.stopPropagation(); onRemove(proc.id); }}
-                           className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-                           title="Remover"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(proc.id);
+                          }}
+                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+                          title="Remover"
                         >
                           <Icons.Trash className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                    <h4 className="text-xs font-black text-slate-900 mb-0.5">{proc.cnj}</h4>
+                    <h4 className="text-xs font-black text-slate-900 mb-0.5">
+                      {proc.cnj}
+                    </h4>
                     <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tight truncate">
                       {linkedClient ? linkedClient.name : proc.clientName}
                     </p>
@@ -1139,7 +1318,8 @@ const MonitoringView = ({
                     <div className="mt-2 flex items-center gap-1.5">
                       <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
                       <span className="text-[7px] font-black text-emerald-600 uppercase">
-                        At: {new Date(proc.lastUpdate).toLocaleDateString("pt-BR")}
+                        At:{" "}
+                        {new Date(proc.lastUpdate).toLocaleDateString("pt-BR")}
                       </span>
                     </div>
                   </div>
@@ -1153,19 +1333,24 @@ const MonitoringView = ({
               <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100 space-y-3 animate-in slide-in-from-right-4 duration-300">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-3 border-b border-slate-100">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">{selectedProcess.cnj}</h3>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                      {selectedProcess.cnj}
+                    </h3>
                     <div className="flex flex-wrap items-center gap-2 mt-0.5">
                       <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-wide">
                         {selectedProcess.court}
                       </span>
                       {getGrauDisplay(selectedProcess.grau || "") && (
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${getGrauDisplay(selectedProcess.grau || "")?.color}`}>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${getGrauDisplay(selectedProcess.grau || "")?.color}`}
+                        >
                           {getGrauDisplay(selectedProcess.grau || "")?.label}
                         </span>
                       )}
                       <div className="w-1 h-1 rounded-full bg-slate-300" />
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                        {clients.find(c => c.id === selectedProcess.clientId)?.name || selectedProcess.clientName}
+                        {clients.find((c) => c.id === selectedProcess.clientId)
+                          ?.name || selectedProcess.clientName}
                       </p>
                     </div>
                     {selectedProcess.classe && (
@@ -1175,52 +1360,80 @@ const MonitoringView = ({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                     <div className="text-right">
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Status Atual</p>
-                       <p className="text-[10px] font-black text-slate-900 uppercase">{selectedProcess.status || "Em andamento"}</p>
-                     </div>
-                     <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                       <Icons.Activity className="w-4 h-4" />
-                     </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">
+                        Status Atual
+                      </p>
+                      <p className="text-[10px] font-black text-slate-900 uppercase">
+                        {selectedProcess.status || "Em andamento"}
+                      </p>
+                    </div>
+                    <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                      <Icons.Activity className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] flex items-center gap-2">
-                    <Icons.List className="w-3.5 h-3.5 text-blue-600" /> Histórico de Movimentações
+                    <Icons.List className="w-3.5 h-3.5 text-blue-600" />{" "}
+                    Histórico de Movimentações
                   </h4>
-                  
+
                   <div className="relative space-y-2 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
                     {selectedProcess.movements.length > 0 ? (
                       [...selectedProcess.movements]
-                        .sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())
+                        .sort(
+                          (a, b) =>
+                            new Date(b.dataHora).getTime() -
+                            new Date(a.dataHora).getTime(),
+                        )
                         .map((move, idx) => (
-                          <div key={idx} className="relative pl-8 animate-in fade-in duration-500" style={{ animationDelay: `${idx * 50}ms` }}>
-                          <div className={`absolute left-0 top-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center z-10 ${idx === 0 ? "bg-blue-600 shadow-lg shadow-blue-300" : "bg-slate-200"}`}>
-                            {idx === 0 && <Icons.Flame className="w-2.5 h-2.5 text-white" />}
+                          <div
+                            key={idx}
+                            className="relative pl-8 animate-in fade-in duration-500"
+                            style={{ animationDelay: `${idx * 50}ms` }}
+                          >
+                            <div
+                              className={`absolute left-0 top-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center z-10 ${idx === 0 ? "bg-blue-600 shadow-lg shadow-blue-300" : "bg-slate-200"}`}
+                            >
+                              {idx === 0 && (
+                                <Icons.Flame className="w-2.5 h-2.5 text-white" />
+                              )}
+                            </div>
+                            <div
+                              className={`p-2.5 rounded-xl border transition-all ${idx === 0 ? "bg-slate-50 border-blue-200" : "bg-white border-slate-100"}`}
+                            >
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 block">
+                                {new Date(move.dataHora).toLocaleString(
+                                  "pt-BR",
+                                )}
+                              </span>
+                              <p
+                                className={`text-xs font-bold leading-snug ${idx === 0 ? "text-slate-900" : "text-slate-600"}`}
+                              >
+                                {move.descricao}
+                              </p>
+                              {move.complementos &&
+                                move.complementos.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {move.complementos.map((c, ki) => (
+                                      <span
+                                        key={ki}
+                                        className="text-[8px] font-black bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md uppercase"
+                                      >
+                                        {c}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
                           </div>
-                          <div className={`p-2.5 rounded-xl border transition-all ${idx === 0 ? "bg-slate-50 border-blue-200" : "bg-white border-slate-100"}`}>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 block">
-                              {new Date(move.dataHora).toLocaleString("pt-BR")}
-                            </span>
-                            <p className={`text-xs font-bold leading-snug ${idx === 0 ? "text-slate-900" : "text-slate-600"}`}>
-                              {move.descricao}
-                            </p>
-                            {move.complementos && move.complementos.length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {move.complementos.map((c, ki) => (
-                                  <span key={ki} className="text-[8px] font-black bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md uppercase">
-                                    {c}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
+                        ))
                     ) : (
                       <div className="pl-10 text-slate-400 text-sm font-medium italic">
-                        Nenhuma movimentação detalhada encontrada na API Pública.
+                        Nenhuma movimentação detalhada encontrada na API
+                        Pública.
                       </div>
                     )}
                   </div>
@@ -1231,9 +1444,12 @@ const MonitoringView = ({
                 <div className="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-6 text-slate-200">
                   <Icons.Activity className="w-10 h-10" />
                 </div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Selecione um Processo</h3>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">
+                  Selecione um Processo
+                </h3>
                 <p className="text-xs font-medium text-slate-400 max-w-[280px]">
-                  Clique em um processo na lista lateral para visualizar o histórico completo de movimentações.
+                  Clique em um processo na lista lateral para visualizar o
+                  histórico completo de movimentações.
                 </p>
               </div>
             )}
@@ -1246,7 +1462,9 @@ const MonitoringView = ({
           {toastMessage && (
             <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-800 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <Icons.ShieldCheck className="w-5 h-5 text-emerald-400" />
-              <span className="text-xs font-black uppercase tracking-wider">{toastMessage}</span>
+              <span className="text-xs font-black uppercase tracking-wider">
+                {toastMessage}
+              </span>
             </div>
           )}
 
@@ -1259,7 +1477,7 @@ const MonitoringView = ({
                   Publicações do Diário de Justiça (DJEN)
                 </h3>
               </div>
-              
+
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setShowOabSettings(!showOabSettings)}
@@ -1292,15 +1510,23 @@ const MonitoringView = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-2">
               {/* Journal / Tribunal Filter */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Tribunal</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Tribunal
+                </label>
                 <select
                   value={djenJournalFilter}
                   onChange={(e) => setDjenJournalFilter(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
                 >
                   <option value="ALL">Todos</option>
-                  {Array.from(new Set(publications.map(p => p.tribunal).filter(Boolean))).map((court: string) => (
-                    <option key={court} value={court}>{court}</option>
+                  {Array.from(
+                    new Set(
+                      publications.map((p) => p.tribunal).filter(Boolean),
+                    ),
+                  ).map((court: string) => (
+                    <option key={court} value={court}>
+                      {court}
+                    </option>
                   ))}
                   {/* Common defaults as fallback */}
                   <option value="TJRN">TJ Rio Grande do Norte (TJRN)</option>
@@ -1310,15 +1536,25 @@ const MonitoringView = ({
 
               {/* Notebook / Act type Filter */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Tipo de Comunicação</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Tipo de Comunicação
+                </label>
                 <select
                   value={djenNotebookFilter}
                   onChange={(e) => setDjenNotebookFilter(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer"
                 >
                   <option value="ALL">Todos</option>
-                  {Array.from(new Set(publications.map(p => p.tipoComunicacao).filter(Boolean))).map((act: string) => (
-                    <option key={act} value={act}>{act}</option>
+                  {Array.from(
+                    new Set(
+                      publications
+                        .map((p) => p.tipoComunicacao)
+                        .filter(Boolean),
+                    ),
+                  ).map((act: string) => (
+                    <option key={act} value={act}>
+                      {act}
+                    </option>
                   ))}
                   <option value="Intimação">Intimação</option>
                   <option value="Citação">Citação</option>
@@ -1328,7 +1564,9 @@ const MonitoringView = ({
 
               {/* Period Filter */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Período</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Período
+                </label>
                 <select
                   value={djenPeriodFilter}
                   onChange={(e) => setDjenPeriodFilter(e.target.value)}
@@ -1344,7 +1582,9 @@ const MonitoringView = ({
 
               {/* Read / Bin Status Filter */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Status</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Status
+                </label>
                 <select
                   value={djenStatusFilter}
                   onChange={(e) => setDjenStatusFilter(e.target.value)}
@@ -1359,7 +1599,9 @@ const MonitoringView = ({
 
               {/* Text Search Input */}
               <div className="space-y-1 sm:col-span-2 md:col-span-4 lg:col-span-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Pesquisa textual</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Pesquisa textual
+                </label>
                 <div className="relative">
                   <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
                   <input
@@ -1384,7 +1626,10 @@ const MonitoringView = ({
                     Painel de Identificação por OAB
                   </h4>
                   <p className="text-[11px] font-medium text-slate-500 leading-relaxed max-w-2xl">
-                    Configure os registros abaixo correspondente aos advogados do escritório. O sistema utilizará os números para importar as publicações de forma autoritativa do Diário de Justiça Eletrônico Nacional (DJEN).
+                    Configure os registros abaixo correspondente aos advogados
+                    do escritório. O sistema utilizará os números para importar
+                    as publicações de forma autoritativa do Diário de Justiça
+                    Eletrônico Nacional (DJEN).
                   </p>
                 </div>
               </div>
@@ -1397,7 +1642,9 @@ const MonitoringView = ({
                   </span>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Número</label>
+                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        Número
+                      </label>
                       <input
                         type="text"
                         className="w-full bg-slate-50 p-2.5 rounded-xl text-xs font-bold border border-slate-100 outline-none focus:ring-2 focus:ring-blue-100"
@@ -1407,13 +1654,19 @@ const MonitoringView = ({
                       />
                     </div>
                     <div className="col-span-1 space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Estado (UF)</label>
+                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        Estado (UF)
+                      </label>
                       <select
                         className="w-full bg-slate-50 p-2.5 rounded-xl text-xs font-bold border border-slate-100 outline-none"
                         value={userUf}
                         onChange={(e) => setUserUf(e.target.value)}
                       >
-                        {rawUfs.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                        {rawUfs.map((uf) => (
+                          <option key={uf} value={uf}>
+                            {uf}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -1426,25 +1679,41 @@ const MonitoringView = ({
                   </span>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Número</label>
+                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        Número
+                      </label>
                       <input
                         type="text"
                         disabled={userProfile?.role === UserRole.ADMIN}
                         className="w-full bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed p-2.5 rounded-xl text-xs font-bold border border-slate-100 outline-none focus:ring-2 focus:ring-blue-100"
-                        placeholder={userProfile?.role === UserRole.ADMIN ? "Não Aplicável (Você é o Administrador)" : "Ex: 54321"}
-                        value={userProfile?.role === UserRole.ADMIN ? "" : advAdminOab}
+                        placeholder={
+                          userProfile?.role === UserRole.ADMIN
+                            ? "Não Aplicável (Você é o Administrador)"
+                            : "Ex: 54321"
+                        }
+                        value={
+                          userProfile?.role === UserRole.ADMIN
+                            ? ""
+                            : advAdminOab
+                        }
                         onChange={(e) => setAdvAdminOab(e.target.value)}
                       />
                     </div>
                     <div className="col-span-1 space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Estado (UF)</label>
+                      <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        Estado (UF)
+                      </label>
                       <select
                         disabled={userProfile?.role === UserRole.ADMIN}
                         className="w-full bg-slate-50 disabled:bg-slate-100 disabled:cursor-not-allowed p-2.5 rounded-xl text-xs font-bold border border-slate-100 outline-none"
                         value={advAdminUf}
                         onChange={(e) => setAdvAdminUf(e.target.value)}
                       >
-                        {rawUfs.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                        {rawUfs.map((uf) => (
+                          <option key={uf} value={uf}>
+                            {uf}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -1478,19 +1747,25 @@ const MonitoringView = ({
               <input
                 type="checkbox"
                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                checked={displayedPublications.length > 0 && displayedPublications.every(pub => selectedPubIds.includes(pub.id))}
+                checked={
+                  displayedPublications.length > 0 &&
+                  displayedPublications.every((pub) =>
+                    selectedPubIds.includes(pub.id),
+                  )
+                }
                 onChange={(e) => {
                   if (e.target.checked) {
-                    setSelectedPubIds(displayedPublications.map(p => p.id));
+                    setSelectedPubIds(displayedPublications.map((p) => p.id));
                   } else {
                     setSelectedPubIds([]);
                   }
                 }}
               />
               <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px]">
-                Exibindo {displayedPublications.length} de {publications.length} publicações
+                Exibindo {displayedPublications.length} de {publications.length}{" "}
+                publicações
               </span>
-              
+
               {selectedPubIds.length > 0 && (
                 <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider animate-in pulse duration-1000 infinite">
                   {selectedPubIds.length} selecionadas
@@ -1588,7 +1863,9 @@ const MonitoringView = ({
                     Nenhuma publicação encontrada
                   </h4>
                   <p className="text-[9px] font-medium text-slate-400 max-w-[200px] mx-auto mt-2 leading-relaxed">
-                    Não há publicações processuais que correspondam ao filtro ou OAB selecionados atualmente. Busque novamente ou mude os filtros!
+                    Não há publicações processuais que correspondam ao filtro ou
+                    OAB selecionados atualmente. Busque novamente ou mude os
+                    filtros!
                   </p>
                 </div>
               ) : djenViewLayout === "grid" ? (
@@ -1599,14 +1876,19 @@ const MonitoringView = ({
                       onClick={() => handleSelectDjenPub(pub)}
                       className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative shadow-sm ${selectedDjenPub?.id === pub.id ? "bg-blue-50/50 border-blue-600" : "bg-white border-slate-100 hover:border-slate-300"}`}
                     >
-                      <div className="absolute top-4 right-4 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="absolute top-4 right-4 flex items-center gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                           checked={selectedPubIds.includes(pub.id)}
                           onChange={() => {
-                            setSelectedPubIds(prev =>
-                              prev.includes(pub.id) ? prev.filter(x => x !== pub.id) : [...prev, pub.id]
+                            setSelectedPubIds((prev) =>
+                              prev.includes(pub.id)
+                                ? prev.filter((x) => x !== pub.id)
+                                : [...prev, pub.id],
                             );
                           }}
                         />
@@ -1617,29 +1899,49 @@ const MonitoringView = ({
                           {pub.tribunal}
                         </span>
                         {pub.isRead ? (
-                          <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Lida</span>
+                          <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                            Lida
+                          </span>
                         ) : (
-                          <span className="text-[8px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Não Lida</span>
+                          <span className="text-[8px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                            Não Lida
+                          </span>
                         )}
                       </div>
 
-                      <h4 className="text-xs font-black text-slate-900 mb-1 tracking-tight truncate pr-6">{formatCNJ(pub.numeroProcesso)}</h4>
+                      <h4 className="text-xs font-black text-slate-900 mb-1 tracking-tight truncate pr-6">
+                        {formatCNJ(pub.numeroProcesso)}
+                      </h4>
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
-                        Disp: {pub.dataDisponibilizacao ? new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR") : "S/ Data"}
+                        Disp:{" "}
+                        {pub.dataDisponibilizacao
+                          ? new Date(
+                              pub.dataDisponibilizacao,
+                            ).toLocaleDateString("pt-BR")
+                          : "S/ Data"}
                       </p>
                       {pub.destinatarios && pub.destinatarios.length > 0 ? (
                         <div className="mt-1 space-y-0.5">
-                          <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Destinatário Mencionado:</span>
+                          <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">
+                            Destinatário Mencionado:
+                          </span>
                           <div className="flex flex-wrap gap-1">
                             {pub.destinatarios.map((d: any, key: number) => (
-                              <span key={key} className="text-[8.5px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[200px]">
-                                {d.nome || d.nomeDestinatario || "Parte Interessada"}
+                              <span
+                                key={key}
+                                className="text-[8.5px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[200px]"
+                              >
+                                {d.nome ||
+                                  d.nomeDestinatario ||
+                                  "Parte Interessada"}
                               </span>
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-1 text-[8.5px] font-semibold text-slate-400 italic">Nenhum destinatário mencionado</div>
+                        <div className="mt-1 text-[8.5px] font-semibold text-slate-400 italic">
+                          Nenhum destinatário mencionado
+                        </div>
                       )}
                     </div>
                   ))}
@@ -1648,31 +1950,56 @@ const MonitoringView = ({
                 /* Grouped lists chronologically formatted */
                 <div className="space-y-4">
                   {(() => {
-                    const sortedDates = Array.from(new Set(displayedPublications.map(pub => {
-                      if (!pub.dataDisponibilizacao) return "Sem Data";
-                      try {
-                        return new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR");
-                      } catch(e) { return "Sem Data"; }
-                    }))).sort((a, b) => {
+                    const sortedDates = Array.from(
+                      new Set(
+                        displayedPublications.map((pub) => {
+                          if (!pub.dataDisponibilizacao) return "Sem Data";
+                          try {
+                            return new Date(
+                              pub.dataDisponibilizacao,
+                            ).toLocaleDateString("pt-BR");
+                          } catch (e) {
+                            return "Sem Data";
+                          }
+                        }),
+                      ),
+                    ).sort((a, b) => {
                       if (a === "Sem Data") return 1;
                       if (b === "Sem Data") return -1;
                       const [da, ma, ya] = a.split("/").map(Number);
                       const [db, mb, yb] = b.split("/").map(Number);
-                      return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
+                      return (
+                        new Date(yb, mb - 1, db).getTime() -
+                        new Date(ya, ma - 1, da).getTime()
+                      );
                     });
 
-                    return sortedDates.map(dateStr => {
-                      const listForDate = displayedPublications.filter(pub => {
-                        if (!pub.dataDisponibilizacao) return dateStr === "Sem Data";
-                        try {
-                          return new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR") === dateStr;
-                        } catch(e) { return dateStr === "Sem Data"; }
-                      });
+                    return sortedDates.map((dateStr) => {
+                      const listForDate = displayedPublications.filter(
+                        (pub) => {
+                          if (!pub.dataDisponibilizacao)
+                            return dateStr === "Sem Data";
+                          try {
+                            return (
+                              new Date(
+                                pub.dataDisponibilizacao,
+                              ).toLocaleDateString("pt-BR") === dateStr
+                            );
+                          } catch (e) {
+                            return dateStr === "Sem Data";
+                          }
+                        },
+                      );
 
-                      const allDateSelected = listForDate.every(p => selectedPubIds.includes(p.id));
+                      const allDateSelected = listForDate.every((p) =>
+                        selectedPubIds.includes(p.id),
+                      );
 
                       return (
-                        <div key={dateStr} className="space-y-2 animate-in fade-in duration-300">
+                        <div
+                          key={dateStr}
+                          className="space-y-2 animate-in fade-in duration-300"
+                        >
                           {/* Chronological Header Divider */}
                           <div className="flex items-center gap-2 px-1 py-1 bg-slate-100/75 rounded-lg border border-slate-250">
                             <input
@@ -1680,16 +2007,24 @@ const MonitoringView = ({
                               className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                               checked={allDateSelected}
                               onChange={(e) => {
-                                const listIds = listForDate.map(p => p.id);
+                                const listIds = listForDate.map((p) => p.id);
                                 if (e.target.checked) {
-                                  setSelectedPubIds(prev => Array.from(new Set([...prev, ...listIds])));
+                                  setSelectedPubIds((prev) =>
+                                    Array.from(new Set([...prev, ...listIds])),
+                                  );
                                 } else {
-                                  setSelectedPubIds(prev => prev.filter(id => !listIds.includes(id)));
+                                  setSelectedPubIds((prev) =>
+                                    prev.filter((id) => !listIds.includes(id)),
+                                  );
                                 }
                               }}
                             />
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                              Dia {dateStr} ({listForDate.length} {listForDate.length === 1 ? 'publicação' : 'publicações'})
+                              Dia {dateStr} ({listForDate.length}{" "}
+                              {listForDate.length === 1
+                                ? "publicação"
+                                : "publicações"}
+                              )
                             </span>
                           </div>
 
@@ -1701,14 +2036,19 @@ const MonitoringView = ({
                                 onClick={() => handleSelectDjenPub(pub)}
                                 className={`w-full p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${selectedDjenPub?.id === pub.id ? "bg-blue-50/70 border-blue-600 shadow-md transform scale-[1.01]" : "bg-white border-slate-100 hover:border-slate-350 hover:bg-slate-50/50"}`}
                               >
-                                <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <div
+                                  className="absolute top-3.5 right-3.5 flex items-center gap-1.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <input
                                     type="checkbox"
                                     className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                     checked={selectedPubIds.includes(pub.id)}
                                     onChange={() => {
-                                      setSelectedPubIds(prev =>
-                                        prev.includes(pub.id) ? prev.filter(x => x !== pub.id) : [...prev, pub.id]
+                                      setSelectedPubIds((prev) =>
+                                        prev.includes(pub.id)
+                                          ? prev.filter((x) => x !== pub.id)
+                                          : [...prev, pub.id],
                                       );
                                     }}
                                   />
@@ -1719,29 +2059,47 @@ const MonitoringView = ({
                                     {pub.tribunal}
                                   </span>
                                   {pub.isRead ? (
-                                    <span className="text-[7.5px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Lida</span>
+                                    <span className="text-[7.5px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      Lida
+                                    </span>
                                   ) : (
-                                    <span className="text-[7.5px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Não Lida</span>
+                                    <span className="text-[7.5px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      Não Lida
+                                    </span>
                                   )}
                                 </div>
 
-                                <h4 className="text-xs font-black text-slate-900 mb-1 tracking-tight truncate pr-6">{formatCNJ(pub.numeroProcesso)}</h4>
+                                <h4 className="text-xs font-black text-slate-900 mb-1 tracking-tight truncate pr-6">
+                                  {formatCNJ(pub.numeroProcesso)}
+                                </h4>
                                 <div className="text-[8px] font-black text-slate-500 bg-slate-150 px-1.5 py-0.5 rounded inline-block uppercase tracking-wider mb-1">
                                   {pub.tipoComunicacao || "Intimação"}
                                 </div>
-                                {pub.destinatarios && pub.destinatarios.length > 0 ? (
+                                {pub.destinatarios &&
+                                pub.destinatarios.length > 0 ? (
                                   <div className="mt-1 space-y-0.5">
-                                    <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Destinatário Mencionado:</span>
+                                    <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">
+                                      Destinatário Mencionado:
+                                    </span>
                                     <div className="flex flex-wrap gap-1">
-                                      {pub.destinatarios.map((d: any, key: number) => (
-                                        <span key={key} className="text-[8.5px] font-bold text-slate-700 bg-slate-50 border border-slate-200/60 px-1.5 py-0.5 rounded truncate max-w-[200px]">
-                                          {d.nome || d.nomeDestinatario || "Parte Interessada"}
-                                        </span>
-                                      ))}
+                                      {pub.destinatarios.map(
+                                        (d: any, key: number) => (
+                                          <span
+                                            key={key}
+                                            className="text-[8.5px] font-bold text-slate-700 bg-slate-50 border border-slate-200/60 px-1.5 py-0.5 rounded truncate max-w-[200px]"
+                                          >
+                                            {d.nome ||
+                                              d.nomeDestinatario ||
+                                              "Parte Interessada"}
+                                          </span>
+                                        ),
+                                      )}
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="mt-1 text-[8.5px] font-semibold text-slate-400 italic">Nenhum destinatário mencionado</div>
+                                  <div className="mt-1 text-[8.5px] font-semibold text-slate-400 italic">
+                                    Nenhum destinatário mencionado
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -1765,24 +2123,49 @@ const MonitoringView = ({
                       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                         <button
                           onClick={() => {
-                            const idx = displayedPublications.findIndex(p => p.id === selectedDjenPub.id);
-                            if (idx > 0) handleSelectDjenPub(displayedPublications[idx - 1]);
+                            const idx = displayedPublications.findIndex(
+                              (p) => p.id === selectedDjenPub.id,
+                            );
+                            if (idx > 0)
+                              handleSelectDjenPub(
+                                displayedPublications[idx - 1],
+                              );
                           }}
-                          disabled={displayedPublications.findIndex(p => p.id === selectedDjenPub.id) <= 0}
+                          disabled={
+                            displayedPublications.findIndex(
+                              (p) => p.id === selectedDjenPub.id,
+                            ) <= 0
+                          }
                           className="p-1.5 hover:bg-white text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition-all"
                           title="Voltar publicação anterior"
                         >
                           <Icons.ChevronLeft className="w-4 h-4" />
                         </button>
                         <span className="text-[9px] font-black text-slate-400 px-1">
-                          {displayedPublications.findIndex(p => p.id === selectedDjenPub.id) + 1} / {displayedPublications.length}
+                          {displayedPublications.findIndex(
+                            (p) => p.id === selectedDjenPub.id,
+                          ) + 1}{" "}
+                          / {displayedPublications.length}
                         </span>
                         <button
                           onClick={() => {
-                            const idx = displayedPublications.findIndex(p => p.id === selectedDjenPub.id);
-                            if (idx >= 0 && idx < displayedPublications.length - 1) handleSelectDjenPub(displayedPublications[idx + 1]);
+                            const idx = displayedPublications.findIndex(
+                              (p) => p.id === selectedDjenPub.id,
+                            );
+                            if (
+                              idx >= 0 &&
+                              idx < displayedPublications.length - 1
+                            )
+                              handleSelectDjenPub(
+                                displayedPublications[idx + 1],
+                              );
                           }}
-                          disabled={displayedPublications.findIndex(p => p.id === selectedDjenPub.id) >= displayedPublications.length - 1}
+                          disabled={
+                            displayedPublications.findIndex(
+                              (p) => p.id === selectedDjenPub.id,
+                            ) >=
+                            displayedPublications.length - 1
+                          }
                           className="p-1.5 hover:bg-white text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition-all"
                           title="Próxima publicação"
                         >
@@ -1795,9 +2178,18 @@ const MonitoringView = ({
                     <div className="flex flex-wrap items-center gap-1.5">
                       {/* Mark read button toggle */}
                       <button
-                        onClick={() => handleMarkAsRead([selectedDjenPub.id], !selectedDjenPub.isRead)}
+                        onClick={() =>
+                          handleMarkAsRead(
+                            [selectedDjenPub.id],
+                            !selectedDjenPub.isRead,
+                          )
+                        }
                         className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
-                        title={selectedDjenPub.isRead ? "Marcar como Não Lida" : "Marcar como Lida"}
+                        title={
+                          selectedDjenPub.isRead
+                            ? "Marcar como Não Lida"
+                            : "Marcar como Lida"
+                        }
                       >
                         {selectedDjenPub.isRead ? (
                           <>
@@ -1807,7 +2199,9 @@ const MonitoringView = ({
                         ) : (
                           <>
                             <Icons.Eye className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="hidden sm:inline">Marcar Lida</span>
+                            <span className="hidden sm:inline">
+                              Marcar Lida
+                            </span>
                           </>
                         )}
                       </button>
@@ -1845,7 +2239,9 @@ const MonitoringView = ({
                       {/* Trash action button */}
                       {selectedDjenPub.isInTrash ? (
                         <button
-                          onClick={() => handleMoveToTrash([selectedDjenPub.id], false)}
+                          onClick={() =>
+                            handleMoveToTrash([selectedDjenPub.id], false)
+                          }
                           className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-indigo-700 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
                           title="Restaurar da lixeira"
                         >
@@ -1854,7 +2250,9 @@ const MonitoringView = ({
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleMoveToTrash([selectedDjenPub.id], true)}
+                          onClick={() =>
+                            handleMoveToTrash([selectedDjenPub.id], true)
+                          }
                           className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
                           title="Mover para a Lixeira"
                         >
@@ -1867,29 +2265,53 @@ const MonitoringView = ({
 
                   {/* Core publication metadata list */}
                   <div className="space-y-1.5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Metadados Processuais</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                      Metadados Processuais
+                    </span>
                     <div className="bg-slate-50 p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-4 border border-slate-100 text-[11px] font-bold text-slate-700 leading-tight">
                       <div>
-                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">Meio Judicial</span>
+                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">
+                          Meio Judicial
+                        </span>
                         <span className="font-black text-slate-900 uppercase">
                           {selectedDjenPub.meio?.toUpperCase().trim() === "E"
                             ? "Edital"
                             : selectedDjenPub.meio?.toUpperCase().trim() === "D"
-                            ? "Diário Eletrônico"
-                            : selectedDjenPub.meio || "Diário Eletrônico"}
+                              ? "Diário Eletrônico"
+                              : selectedDjenPub.meio || "Diário Eletrônico"}
                         </span>
                       </div>
                       <div>
-                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">Tipo de Comunicação</span>
-                        <span className="font-black text-slate-900 uppercase">{selectedDjenPub.tipoComunicacao || "Intimação"}</span>
+                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">
+                          Tipo de Comunicação
+                        </span>
+                        <span className="font-black text-slate-900 uppercase">
+                          {selectedDjenPub.tipoComunicacao || "Intimação"}
+                        </span>
                       </div>
                       <div>
-                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">Disponibilização</span>
-                        <span className="font-black text-slate-900">{selectedDjenPub.dataDisponibilizacao ? new Date(selectedDjenPub.dataDisponibilizacao).toLocaleDateString("pt-BR") : "S/ Data"}</span>
+                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">
+                          Disponibilização
+                        </span>
+                        <span className="font-black text-slate-900">
+                          {selectedDjenPub.dataDisponibilizacao
+                            ? new Date(
+                                selectedDjenPub.dataDisponibilizacao,
+                              ).toLocaleDateString("pt-BR")
+                            : "S/ Data"}
+                        </span>
                       </div>
                       <div>
-                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">Publicação</span>
-                        <span className="font-black text-slate-900">{selectedDjenPub.dataPublicacao ? new Date(selectedDjenPub.dataPublicacao).toLocaleDateString("pt-BR") : "S/ Data"}</span>
+                        <span className="font-extrabold text-slate-400 text-[8px] uppercase block mb-0.5">
+                          Publicação
+                        </span>
+                        <span className="font-black text-slate-900">
+                          {selectedDjenPub.dataPublicacao
+                            ? new Date(
+                                selectedDjenPub.dataPublicacao,
+                              ).toLocaleDateString("pt-BR")
+                            : "S/ Data"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1897,15 +2319,19 @@ const MonitoringView = ({
                   {/* Large Process ID / Number Banner with copy button */}
                   <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md border border-slate-850">
                     <div>
-                      <span className="text-[7.5px] font-black text-slate-450 uppercase tracking-[0.15em] block mb-0.5">Diário de Justiça Eletrônico Nacional</span>
+                      <span className="text-[7.5px] font-black text-slate-450 uppercase tracking-[0.15em] block mb-0.5">
+                        Diário de Justiça Eletrônico Nacional
+                      </span>
                       <h3 className="text-sm sm:text-base font-extrabold tracking-wider leading-none text-slate-100">
                         Processo {formatCNJ(selectedDjenPub.numeroProcesso)}
                       </h3>
                     </div>
-                    
+
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(selectedDjenPub.numeroProcesso);
+                        navigator.clipboard.writeText(
+                          selectedDjenPub.numeroProcesso,
+                        );
                         showToast("Número do processo copiado!");
                       }}
                       className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-white border border-slate-700 hover:border-slate-600 rounded-xl font-bold text-[9px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 self-start sm:self-auto shadow-sm"
@@ -1917,23 +2343,36 @@ const MonitoringView = ({
                   </div>
 
                   {/* Destinatários info panel */}
-                  {selectedDjenPub.destinatarios && selectedDjenPub.destinatarios.length > 0 && (
-                    <div className="space-y-1.5">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Advogados / Destinatários Mencionados</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {selectedDjenPub.destinatarios.map((d: any, key: number) => (
-                          <span key={key} className="bg-slate-50 border border-slate-200 text-slate-750 px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-tight flex items-center gap-1.5">
-                            <Icons.Users className="w-3.5 h-3.5 text-blue-500" />
-                            {d.nome || d.nomeDestinatario || "Parte Interessada"} {d.oab ? `• OAB: ${d.oab}` : ""}
-                          </span>
-                        ))}
+                  {selectedDjenPub.destinatarios &&
+                    selectedDjenPub.destinatarios.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                          Advogados / Destinatários Mencionados
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedDjenPub.destinatarios.map(
+                            (d: any, key: number) => (
+                              <span
+                                key={key}
+                                className="bg-slate-50 border border-slate-200 text-slate-750 px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-tight flex items-center gap-1.5"
+                              >
+                                <Icons.Users className="w-3.5 h-3.5 text-blue-500" />
+                                {d.nome ||
+                                  d.nomeDestinatario ||
+                                  "Parte Interessada"}{" "}
+                                {d.oab ? `• OAB: ${d.oab}` : ""}
+                              </span>
+                            ),
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {/* Beautiful body text reader with intelligent advocate name highlighter */}
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Teor da Publicação</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                      Teor da Publicação
+                    </span>
                     <div className="bg-slate-50 text-slate-850 p-6 rounded-3xl font-mono text-xs leading-relaxed whitespace-pre-wrap select-all max-h-[450px] overflow-y-auto custom-scrollbar border border-slate-200 shadow-inner">
                       {highlightTeamNames(selectedDjenPub.texto)}
                     </div>
@@ -1944,9 +2383,12 @@ const MonitoringView = ({
                   <div className="w-20 h-20 bg-white rounded-3xl shadow-md flex items-center justify-center mb-6 text-slate-350">
                     <Icons.BookmarkCheck className="w-10 h-10 text-blue-500" />
                   </div>
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Painel de Leitura Completo</h3>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">
+                    Painel de Leitura Completo
+                  </h3>
                   <p className="text-xs font-medium text-slate-500 max-w-[280px] leading-relaxed">
-                    Selecione qualquer publicação listada à esquerda para carregar o leitor dinâmico do diário oficial.
+                    Selecione qualquer publicação listada à esquerda para
+                    carregar o leitor dinâmico do diário oficial.
                   </p>
                 </div>
               )}
@@ -1963,19 +2405,25 @@ const MonitoringView = ({
       >
         <div className="space-y-6">
           <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl flex gap-4 items-start">
-             <div className="p-2 bg-blue-600 text-white rounded-xl shadow-lg">
-               <Icons.ShieldCheck className="w-5 h-5" />
-             </div>
-             <div>
-               <p className="text-xs font-black text-blue-900 uppercase tracking-tight mb-1">Dica de Formatação</p>
-               <p className="text-[11px] font-medium text-blue-700 leading-relaxed">
-                 O padrão CNJ é NNNNNNN-DD.YYYY.J.TR.OOOO. O sistema buscará automaticamente as informações nos tribunais integrados ao Datajud.
-               </p>
-             </div>
+            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-lg">
+              <Icons.ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black text-blue-900 uppercase tracking-tight mb-1">
+                Dica de Formatação
+              </p>
+              <p className="text-[11px] font-medium text-blue-700 leading-relaxed">
+                O padrão CNJ é NNNNNNN-DD.YYYY.J.TR.OOOO. O sistema buscará
+                automaticamente as informações nos tribunais integrados ao
+                Datajud.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Número do Processo (CNJ)</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Número do Processo (CNJ)
+            </label>
             <input
               type="text"
               className="w-full bg-slate-50 p-5 rounded-2xl font-black text-lg outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300"
@@ -1986,15 +2434,19 @@ const MonitoringView = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Vincular a Cliente (Opcional)</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Vincular a Cliente (Opcional)
+            </label>
             <select
               className="w-full bg-slate-50 p-5 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all"
               value={selectedClientId}
               onChange={(e) => setSelectedClientId(e.target.value)}
             >
               <option value="">Nenhum cliente selecionado</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -2016,12 +2468,17 @@ const MonitoringView = ({
 
       <Modal
         isOpen={isEditing}
-        onClose={() => { setIsEditing(false); setEditingProcess(null); }}
+        onClose={() => {
+          setIsEditing(false);
+          setEditingProcess(null);
+        }}
         title="Editar Processo"
       >
         <div className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">CNJ (Não Editável)</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              CNJ (Não Editável)
+            </label>
             <input
               type="text"
               readOnly
@@ -2031,7 +2488,9 @@ const MonitoringView = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome de Exibição do Cliente</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Nome de Exibição do Cliente
+            </label>
             <input
               type="text"
               className="w-full bg-slate-50 p-5 rounded-2xl font-black text-lg outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300"
@@ -2042,15 +2501,19 @@ const MonitoringView = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Vincular a Cliente do Sistema</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Vincular a Cliente do Sistema
+            </label>
             <select
               className="w-full bg-slate-50 p-5 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all"
               value={editClientId}
               onChange={(e) => setEditClientId(e.target.value)}
             >
               <option value="">Acompanhamento Geral</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -2255,33 +2718,53 @@ const Sidebar = ({
   toggleSidebar: () => void;
 }) => {
   const [isOfficeSelectorOpen, setIsOfficeSelectorOpen] = useState(false);
-  
-  const menuItems = currentView === "superadmin"
-    ? [
-        { id: "superadmin", label: "Faturamento Geral", icon: <Icons.ShieldCheck /> },
-      ]
-    : [
-        { id: "dashboard", label: "Dashboard", icon: <Icons.Dashboard /> },
-        { id: "agenda", label: "Agenda", icon: <Icons.Calendar /> },
-        { id: "deadlines", label: "Controle de Prazos", icon: <Icons.List /> },
-        { id: "timesheet", label: "Gestão de Tempo", icon: <Icons.Clock /> },
-        { id: "clients", label: "Clientes", icon: <Icons.Users /> },
-        { id: "correspondence", label: "Ofícios e Memorandos", icon: <Icons.Correspondence /> },
-        { id: "monitoring", label: "Monitoramento", icon: <Icons.Activity /> },
-        { id: "documents", label: "Documentos", icon: <Icons.FileText /> },
-        { id: "reports", label: "Relatórios", icon: <Icons.Report /> },
-        { id: "finance", label: "Financeiro", icon: <Icons.Finance /> },
-        { id: "team", label: "Equipe", icon: <Icons.Users /> },
-        { id: "settings", label: "Configurações", icon: <Icons.Settings /> },
-      ].filter(item => {
-        if (item.id === "team") {
-          return userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR;
-        }
-        if (item.id === "finance") {
-          return userProfile?.role === UserRole.ADMIN;
-        }
-        return true;
-      });
+
+  const menuItems =
+    currentView === "superadmin"
+      ? [
+          {
+            id: "superadmin",
+            label: "Faturamento Geral",
+            icon: <Icons.ShieldCheck />,
+          },
+        ]
+      : [
+          { id: "dashboard", label: "Dashboard", icon: <Icons.Dashboard /> },
+          { id: "agenda", label: "Agenda", icon: <Icons.Calendar /> },
+          {
+            id: "deadlines",
+            label: "Controle de Prazos",
+            icon: <Icons.List />,
+          },
+          { id: "timesheet", label: "Gestão de Tempo", icon: <Icons.Clock /> },
+          { id: "clients", label: "Clientes", icon: <Icons.Users /> },
+          {
+            id: "correspondence",
+            label: "Ofícios e Memorandos",
+            icon: <Icons.Correspondence />,
+          },
+          {
+            id: "monitoring",
+            label: "Monitoramento",
+            icon: <Icons.Activity />,
+          },
+          { id: "documents", label: "Documentos", icon: <Icons.FileText /> },
+          { id: "reports", label: "Relatórios", icon: <Icons.Report /> },
+          { id: "finance", label: "Financeiro", icon: <Icons.Finance /> },
+          { id: "team", label: "Equipe", icon: <Icons.Users /> },
+          { id: "settings", label: "Configurações", icon: <Icons.Settings /> },
+        ].filter((item) => {
+          if (item.id === "team") {
+            return (
+              userProfile?.role === UserRole.ADMIN ||
+              userProfile?.role === UserRole.COORDINATOR
+            );
+          }
+          if (item.id === "finance") {
+            return userProfile?.role === UserRole.ADMIN;
+          }
+          return true;
+        });
 
   return (
     <>
@@ -2300,18 +2783,20 @@ const Sidebar = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {dynamicSettings.officeLogo ? (
-                  <img 
-                    src={dynamicSettings.officeLogo} 
-                    alt={dynamicSettings.officeName || "Logo"} 
-                    className="h-20 md:h-24 w-auto max-w-[210px] object-contain animate-in fade-in duration-500"
-                    referrerPolicy="no-referrer"
-                  />
+                <img
+                  src={dynamicSettings.officeLogo}
+                  alt={dynamicSettings.officeName || "Logo"}
+                  className="h-20 md:h-24 w-auto max-w-[210px] object-contain animate-in fade-in duration-500"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-lg shadow-lg shadow-blue-500/20">
                     LP
                   </div>
-                  <h1 className="text-lg font-black tracking-tight">LexPremium</h1>
+                  <h1 className="text-lg font-black tracking-tight">
+                    LexPremium
+                  </h1>
                 </div>
               )}
             </div>
@@ -2345,74 +2830,84 @@ const Sidebar = ({
         </nav>
 
         <div className="p-3 md:p-4 mt-auto border-t border-white/5 space-y-3 bg-white/[0.01]">
-          {userProfile && (userProfile.offices || user?.email === "rudyendo@gmail.com") && (
-            <div className="relative">
-              <button
-                onClick={() => setIsOfficeSelectorOpen(!isOfficeSelectorOpen)}
-                className="w-full bg-white/5 border border-white/10 p-2.5 rounded-lg flex items-center justify-between group hover:bg-white/10 transition-all font-sans"
-              >
-                <div className="flex flex-col items-start min-w-0">
-                  <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mb-0.5">
-                    Workspace Ativo
-                  </span>
-                  <span className="text-[11px] font-bold text-white truncate w-full flex items-center gap-2 justify-between">
-                    <span className="truncate">
-                      {currentView === "superadmin"
-                        ? "🛡️ Painel de Controle Geral"
-                        : (dynamicSettings.officeName || userProfile.offices?.find(o => o.id === userProfile.officeId)?.name || userProfile.email)}
+          {userProfile &&
+            (userProfile.offices || user?.email === "rudyendo@gmail.com") && (
+              <div className="relative">
+                <button
+                  onClick={() => setIsOfficeSelectorOpen(!isOfficeSelectorOpen)}
+                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-lg flex items-center justify-between group hover:bg-white/10 transition-all font-sans"
+                >
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mb-0.5">
+                      Workspace Ativo
                     </span>
-                    <Icons.ChevronDown className={`w-2.5 h-2.5 shrink-0 transition-transform ${isOfficeSelectorOpen ? 'rotate-180' : ''}`} />
-                  </span>
-                </div>
-              </button>
+                    <span className="text-[11px] font-bold text-white truncate w-full flex items-center gap-2 justify-between">
+                      <span className="truncate">
+                        {currentView === "superadmin"
+                          ? "🛡️ Painel de Controle Geral"
+                          : dynamicSettings.officeName ||
+                            userProfile.offices?.find(
+                              (o) => o.id === userProfile.officeId,
+                            )?.name ||
+                            userProfile.email}
+                      </span>
+                      <Icons.ChevronDown
+                        className={`w-2.5 h-2.5 shrink-0 transition-transform ${isOfficeSelectorOpen ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </div>
+                </button>
 
-              {isOfficeSelectorOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-                  <div className="p-2 space-y-1 max-h-[250px] overflow-y-auto custom-scrollbar">
-                    {/* Lista de escritórios reais do usuário */}
-                    {userProfile.offices?.map((office) => (
-                      <button
-                        key={office.id}
-                        onClick={() => {
-                          onSwitchOffice(office.id);
-                          setView("dashboard");
-                          setIsOfficeSelectorOpen(false);
-                        }}
-                        className={`w-full p-2.5 rounded-xl flex flex-col items-start transition-all ${(userProfile.officeId === office.id && currentView !== "superadmin") ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-slate-400 hover:text-white'}`}
-                      >
-                        <span className="text-[11px] font-bold truncate w-full text-left">
-                          {office.id === userProfile.officeId && dynamicSettings.officeName ? dynamicSettings.officeName : office.name}
-                        </span>
-                        <span className="text-[8px] font-black uppercase opacity-60 tracking-wider mt-0.5 text-left">
-                          {office.role}
-                        </span>
-                      </button>
-                    ))}
-
-                    {/* Divisor / Opção especial de Super Admin */}
-                    {user?.email === "rudyendo@gmail.com" && (
-                      <div className="border-t border-white/10 pt-1.5 mt-1.5">
+                {isOfficeSelectorOpen && (
+                  <div className="absolute bottom-full left-0 right-0 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <div className="p-2 space-y-1 max-h-[250px] overflow-y-auto custom-scrollbar">
+                      {/* Lista de escritórios reais do usuário */}
+                      {userProfile.offices?.map((office) => (
                         <button
+                          key={office.id}
                           onClick={() => {
-                            setView("superadmin");
+                            onSwitchOffice(office.id);
+                            setView("dashboard");
                             setIsOfficeSelectorOpen(false);
                           }}
-                          className={`w-full p-2.5 rounded-xl flex flex-col items-start transition-all border border-dashed text-left ${currentView === "superadmin" ? 'bg-indigo-900 border-indigo-500 text-white animate-pulse' : 'hover:bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:text-indigo-300'}`}
+                          className={`w-full p-2.5 rounded-xl flex flex-col items-start transition-all ${userProfile.officeId === office.id && currentView !== "superadmin" ? "bg-blue-600 text-white" : "hover:bg-white/5 text-slate-400 hover:text-white"}`}
                         >
-                          <span className="text-[11px] font-black truncate w-full flex items-center gap-1.5">
-                            🛡️ Painel de Controle Geral
+                          <span className="text-[11px] font-bold truncate w-full text-left">
+                            {office.id === userProfile.officeId &&
+                            dynamicSettings.officeName
+                              ? dynamicSettings.officeName
+                              : office.name}
                           </span>
-                          <span className="text-[8px] font-black uppercase opacity-80 tracking-wider mt-0.5">
-                            SISTEMA & FATURAMENTO
+                          <span className="text-[8px] font-black uppercase opacity-60 tracking-wider mt-0.5 text-left">
+                            {office.role}
                           </span>
                         </button>
-                      </div>
-                    )}
+                      ))}
+
+                      {/* Divisor / Opção especial de Super Admin */}
+                      {user?.email === "rudyendo@gmail.com" && (
+                        <div className="border-t border-white/10 pt-1.5 mt-1.5">
+                          <button
+                            onClick={() => {
+                              setView("superadmin");
+                              setIsOfficeSelectorOpen(false);
+                            }}
+                            className={`w-full p-2.5 rounded-xl flex flex-col items-start transition-all border border-dashed text-left ${currentView === "superadmin" ? "bg-indigo-900 border-indigo-500 text-white animate-pulse" : "hover:bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:text-indigo-300"}`}
+                          >
+                            <span className="text-[11px] font-black truncate w-full flex items-center gap-1.5">
+                              🛡️ Painel de Controle Geral
+                            </span>
+                            <span className="text-[8px] font-black uppercase opacity-80 tracking-wider mt-0.5">
+                              SISTEMA & FATURAMENTO
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
           {user && (
             <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 transition-all hover:bg-white/[0.05] group">
@@ -2507,12 +3002,15 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 export default function App() {
   const [view, setView] = useState("dashboard");
   const [deadlinesSearch, setDeadlinesSearch] = useState("");
-  const [deadlinesResponsavelFilter, setDeadlinesResponsavelFilter] = useState("Todos");
+  const [deadlinesResponsavelFilter, setDeadlinesResponsavelFilter] =
+    useState("Todos");
   const [deadlinesEmpresaFilter, setDeadlinesEmpresaFilter] = useState("Todas");
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [monitoredProcesses, setMonitoredProcesses] = useState<MonitoredProcess[]>([]);
+  const [monitoredProcesses, setMonitoredProcesses] = useState<
+    MonitoredProcess[]
+  >([]);
   const [publications, setPublications] = useState<DjenPublication[]>([]);
   const [sentNotifications, setSentNotifications] = useState<Set<string>>(
     new Set(),
@@ -2536,6 +3034,10 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [manualTimerHours, setManualTimerHours] = useState("");
+  const [manualTimerMinutes, setManualTimerMinutes] = useState("");
+  const [isManualInputInDetailsOpen, setIsManualInputInDetailsOpen] =
+    useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<{
     type: "deadline" | "task";
     data: Deadline | AdminTask;
@@ -2547,18 +3049,20 @@ export default function App() {
 
   // Time Tracking Module States
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
-  const [activeTimers, setActiveTimers] = useState<{
-    deadlineId: string;
-    peca: string;
-    empresa: string;
-    elapsedSeconds: number;
-    lastStartedAt: number | null; // null if paused
-    isPlaying: boolean;
-    activityType: string;
-    reviewState?: ReviewState;
-    assignedTo?: string;
-    userId?: string;
-  }[]>(() => {
+  const [activeTimers, setActiveTimers] = useState<
+    {
+      deadlineId: string;
+      peca: string;
+      empresa: string;
+      elapsedSeconds: number;
+      lastStartedAt: number | null; // null if paused
+      isPlaying: boolean;
+      activityType: string;
+      reviewState?: ReviewState;
+      assignedTo?: string;
+      userId?: string;
+    }[]
+  >(() => {
     try {
       const saved = localStorage.getItem("activeTimers");
       return saved ? JSON.parse(saved) : [];
@@ -2570,7 +3074,7 @@ export default function App() {
   // Watch to persist activeTimers
   useEffect(() => {
     if (!activeTimers) return;
-    const cleanTimers = activeTimers.map(t => ({
+    const cleanTimers = activeTimers.map((t) => ({
       deadlineId: t.deadlineId || "",
       peca: t.peca || "",
       empresa: t.empresa || "",
@@ -2591,65 +3095,73 @@ export default function App() {
 
   // Dynamic Favicon & Title for Pending Reviews
   useEffect(() => {
-     if (!userProfile) return;
-     let pendingCount = 0;
-     
-     deadlines.forEach(d => {
-        if (d.status === DeadlineStatus.COMPLETED) return;
-        
-        if (userProfile.role === UserRole.LAWYER) {
-           const isMyDeadline = d.assignedTo === userProfile.id;
-           if (isMyDeadline && d.reviewState === ReviewState.RETURNED_TO_LAWYER) {
-              pendingCount++;
-           }
-        } else if (userProfile.role === UserRole.COORDINATOR) {
-           if (d.reviewState === ReviewState.WAITING_COORDINATOR || d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR) {
-              pendingCount++;
-           }
-        } else if (userProfile.role === UserRole.ADMIN) {
-           if (d.reviewState === ReviewState.WAITING_ADMIN) {
-              pendingCount++;
-           }
+    if (!userProfile) return;
+    let pendingCount = 0;
+
+    deadlines.forEach((d) => {
+      if (d.status === DeadlineStatus.COMPLETED) return;
+
+      if (userProfile.role === UserRole.LAWYER) {
+        const isMyDeadline = d.assignedTo === userProfile.id;
+        if (isMyDeadline && d.reviewState === ReviewState.RETURNED_TO_LAWYER) {
+          pendingCount++;
         }
-     });
+      } else if (userProfile.role === UserRole.COORDINATOR) {
+        if (
+          d.reviewState === ReviewState.WAITING_COORDINATOR ||
+          d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
+        ) {
+          pendingCount++;
+        }
+      } else if (userProfile.role === UserRole.ADMIN) {
+        if (d.reviewState === ReviewState.WAITING_ADMIN) {
+          pendingCount++;
+        }
+      }
+    });
 
-     // Update Document Title
-     document.title = pendingCount > 0 ? `(${pendingCount}) LexPremium` : "LexPremium";
+    // Update Document Title
+    document.title =
+      pendingCount > 0 ? `(${pendingCount}) LexPremium` : "LexPremium";
 
-     // Update Favicon via Canvas
-     const canvas = document.createElement("canvas");
-     canvas.width = 32;
-     canvas.height = 32;
-     const ctx = canvas.getContext("2d");
-     if (ctx) {
-       const img = new Image();
-       img.onload = () => {
-         ctx.drawImage(img, 0, 0, 32, 32);
-         if (pendingCount > 0) {
-           ctx.beginPath();
-           ctx.arc(22, 10, 10, 0, 2 * Math.PI);
-           ctx.fillStyle = "#ef4444"; // red-500
-           ctx.fill();
-           
-           ctx.font = "bold 12px Arial";
-           ctx.fillStyle = "white";
-           ctx.textAlign = "center";
-           ctx.textBaseline = "middle";
-           ctx.fillText(pendingCount.toString(), 22, 11);
-         }
-         
-         let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-         if (!link) {
-           link = document.createElement("link");
-           link.rel = "icon";
-           document.head.appendChild(link);
-         }
-         link.href = canvas.toDataURL("image/png");
-       };
-       // Depending on the public dir setup, wait, if the generic favicon is just a generic shield or default vite icon, we can use a hardcoded data url or fetch the existing link href. 
-       const existingLink = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-       img.src = existingLink ? existingLink.href : "/favicon.ico";
-     }
+    // Update Favicon via Canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 32, 32);
+        if (pendingCount > 0) {
+          ctx.beginPath();
+          ctx.arc(22, 10, 10, 0, 2 * Math.PI);
+          ctx.fillStyle = "#ef4444"; // red-500
+          ctx.fill();
+
+          ctx.font = "bold 12px Arial";
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(pendingCount.toString(), 22, 11);
+        }
+
+        let link = document.querySelector(
+          "link[rel~='icon']",
+        ) as HTMLLinkElement;
+        if (!link) {
+          link = document.createElement("link");
+          link.rel = "icon";
+          document.head.appendChild(link);
+        }
+        link.href = canvas.toDataURL("image/png");
+      };
+      // Depending on the public dir setup, wait, if the generic favicon is just a generic shield or default vite icon, we can use a hardcoded data url or fetch the existing link href.
+      const existingLink = document.querySelector(
+        "link[rel~='icon']",
+      ) as HTMLLinkElement;
+      img.src = existingLink ? existingLink.href : "/favicon.ico";
+    }
   }, [deadlines, userProfile]);
 
   // Modal to confirm stopping a timer and saving/submitting log
@@ -2681,9 +3193,11 @@ export default function App() {
   useEffect(() => {
     setDetailsReviewObservation("");
     setDetailsReviewError("");
+    setTimerStartError("");
   }, [selectedAppointment]);
   const [detailsReviewObservation, setDetailsReviewObservation] = useState("");
   const [detailsReviewError, setDetailsReviewError] = useState("");
+  const [timerStartError, setTimerStartError] = useState("");
 
   // For starting a manual timer
   const [isManualTimerModalOpen, setIsManualTimerModalOpen] = useState(false);
@@ -2694,7 +3208,8 @@ export default function App() {
   });
 
   // For manual / retroactive log registration
-  const [isRetroactiveLogModalOpen, setIsRetroactiveLogModalOpen] = useState(false);
+  const [isRetroactiveLogModalOpen, setIsRetroactiveLogModalOpen] =
+    useState(false);
   const [retroactiveLogForm, setRetroactiveLogForm] = useState({
     processTitle: "",
     peca: "",
@@ -2715,10 +3230,16 @@ export default function App() {
   }, []);
 
   // Finance Module
-  const [financeTransactions, setFinanceTransactions] = useState<FinanceTransaction[]>([]);
-  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
+  const [financeTransactions, setFinanceTransactions] = useState<
+    FinanceTransaction[]
+  >([]);
+  const [recurringExpenses, setRecurringExpenses] = useState<
+    RecurringExpense[]
+  >([]);
   const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
-  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [editingTransactionId, setEditingTransactionId] = useState<
+    string | null
+  >(null);
   const [financeForm, setFinanceForm] = useState({
     type: FinanceTransactionType.RECEITA,
     category: FinanceCategory.HONORARIOS,
@@ -2760,8 +3281,33 @@ export default function App() {
   const [tempOfficeName, setTempOfficeName] = useState("");
   const [tempOfficeLogo, setTempOfficeLogo] = useState("");
   const rawUfs = [
-    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", 
-    "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
+    "AC",
+    "AL",
+    "AM",
+    "AP",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MG",
+    "MS",
+    "MT",
+    "PA",
+    "PB",
+    "PE",
+    "PI",
+    "PR",
+    "RJ",
+    "RN",
+    "RO",
+    "RR",
+    "RS",
+    "SC",
+    "SE",
+    "SP",
+    "TO",
   ];
 
   useEffect(() => {
@@ -2829,15 +3375,20 @@ export default function App() {
   const [isFetchingDatajud, setIsFetchingDatajud] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [clientSearch, setClientSearch] = useState("");
-  const [clientTypeFilter, setClientTypeFilter] = useState<"ALL" | "PF" | "PJ">("ALL");
+  const [clientTypeFilter, setClientTypeFilter] = useState<"ALL" | "PF" | "PJ">(
+    "ALL",
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAddingMonitoredProcess, setIsAddingMonitoredProcess] = useState(false);
+  const [isAddingMonitoredProcess, setIsAddingMonitoredProcess] =
+    useState(false);
 
   // States para adição e edição inline de peças e categorias de forma profissional, eliminando prompts
   const [newPecaInput, setNewPecaInput] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [editingPecaIdx, setEditingPecaIdx] = useState<number | null>(null);
-  const [editingCategoryIdx, setEditingCategoryIdx] = useState<number | null>(null);
+  const [editingCategoryIdx, setEditingCategoryIdx] = useState<number | null>(
+    null,
+  );
   const [editingPecaValue, setEditingPecaValue] = useState("");
   const [editingCategoryValue, setEditingCategoryValue] = useState("");
 
@@ -2869,10 +3420,38 @@ export default function App() {
   const [usedMemorandoNumbers, setUsedMemorandoNumbers] = useState<number[]>(
     [],
   );
-  const [oficioDetails, setOficioDetails] = useState<Record<number, { reservedBy: string; userName: string; deadlineId: string; deadlinePeca?: string; deadlineEmpresa?: string; timestamp?: string }>>({});
-  const [memorandoDetails, setMemorandoDetails] = useState<Record<number, { reservedBy: string; userName: string; deadlineId: string; deadlinePeca?: string; deadlineEmpresa?: string; timestamp?: string }>>({});
-  const [linkingNumber, setLinkingNumber] = useState<{ num: number; category: "oficio" | "memorando" } | null>(null);
-  const [selectedDeadlineForLink, setSelectedDeadlineForLink] = useState<Deadline | null>(null);
+  const [oficioDetails, setOficioDetails] = useState<
+    Record<
+      number,
+      {
+        reservedBy: string;
+        userName: string;
+        deadlineId: string;
+        deadlinePeca?: string;
+        deadlineEmpresa?: string;
+        timestamp?: string;
+      }
+    >
+  >({});
+  const [memorandoDetails, setMemorandoDetails] = useState<
+    Record<
+      number,
+      {
+        reservedBy: string;
+        userName: string;
+        deadlineId: string;
+        deadlinePeca?: string;
+        deadlineEmpresa?: string;
+        timestamp?: string;
+      }
+    >
+  >({});
+  const [linkingNumber, setLinkingNumber] = useState<{
+    num: number;
+    category: "oficio" | "memorando";
+  } | null>(null);
+  const [selectedDeadlineForLink, setSelectedDeadlineForLink] =
+    useState<Deadline | null>(null);
   const [deadlineSearchTerm, setDeadlineSearchTerm] = useState("");
   const [activeCorrespondenceTab, setActiveCorrespondenceTab] = useState<
     "oficio" | "memorando"
@@ -2886,7 +3465,8 @@ export default function App() {
     dataFim: "",
   });
 
-  const [dynamicSettings, setDynamicSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const [dynamicSettings, setDynamicSettings] =
+    useState<NotificationSettings>(DEFAULT_SETTINGS);
 
   const [newAnnotationText, setNewAnnotationText] = useState("");
   const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
@@ -2916,7 +3496,7 @@ export default function App() {
     sector: Sector.GENERAL,
     assignedTo: "",
     isRecurring: false,
-    recurrenceType: 'DAILY',
+    recurrenceType: "DAILY",
     recurrenceEndDate: "",
   });
 
@@ -3121,9 +3701,7 @@ export default function App() {
             return false;
           if (!d.data) return false;
           const [y, m] = d.data.split("-").map(Number);
-          return (
-            y === curYear && (m - 1) === curMonth
-          );
+          return y === curYear && m - 1 === curMonth;
         }).length;
         return { name, total };
       })
@@ -3152,150 +3730,186 @@ export default function App() {
         const profileRef = doc(db, "userProfiles", firebaseUser.uid);
 
         // Snapshot do perfil para atualizações em tempo real
-        unsubscribeProfileSnapshot = onSnapshot(profileRef, async (profileSnap) => {
-          if (profileSnap.exists()) {
-            let profileData = profileSnap.data() as UserProfile;
-            
-            // Garantir que campo offices exista
-            if (!profileData.offices || profileData.offices.length === 0) {
-              const legacyOffices = [{ 
-                id: profileData.officeId || profileData.id, 
-                name: profileData.email || "Meu Escritório", 
-                role: profileData.role || UserRole.ADMIN, 
-                sector: profileData.sector || Sector.GENERAL 
-              }];
-              await updateDoc(profileRef, { 
-                offices: legacyOffices,
-                memberOf: [profileData.officeId || profileData.id]
-              });
-              profileData.offices = legacyOffices;
-              profileData.memberOf = [profileData.officeId || profileData.id];
-            } else if (!profileData.memberOf || profileData.memberOf.length !== profileData.offices.length) {
-              // Sincronizar memberOf se estiver faltando ou desatualizado
-              const memberOf = profileData.offices.map(o => o.id);
-              await updateDoc(profileRef, { memberOf });
-              profileData.memberOf = memberOf;
-            }
+        unsubscribeProfileSnapshot = onSnapshot(
+          profileRef,
+          async (profileSnap) => {
+            if (profileSnap.exists()) {
+              let profileData = profileSnap.data() as UserProfile;
 
-            const currentOffice = profileData.offices?.find(o => o.id === (profileData.officeId || profileData.id));
-            if (currentOffice) {
-              const needsSync = profileData.role !== currentOffice.role || 
-                               profileData.sector !== (currentOffice.sector || Sector.GENERAL);
-              
-              if (needsSync) {
-                profileData.role = currentOffice.role;
-                profileData.sector = currentOffice.sector || Sector.GENERAL;
-                await updateDoc(profileRef, { 
-                  role: profileData.role, 
-                  sector: profileData.sector 
+              // Garantir que campo offices exista
+              if (!profileData.offices || profileData.offices.length === 0) {
+                const legacyOffices = [
+                  {
+                    id: profileData.officeId || profileData.id,
+                    name: profileData.email || "Meu Escritório",
+                    role: profileData.role || UserRole.ADMIN,
+                    sector: profileData.sector || Sector.GENERAL,
+                  },
+                ];
+                await updateDoc(profileRef, {
+                  offices: legacyOffices,
+                  memberOf: [profileData.officeId || profileData.id],
                 });
-              } else {
-                profileData.role = currentOffice.role;
-                profileData.sector = currentOffice.sector || Sector.GENERAL;
+                profileData.offices = legacyOffices;
+                profileData.memberOf = [profileData.officeId || profileData.id];
+              } else if (
+                !profileData.memberOf ||
+                profileData.memberOf.length !== profileData.offices.length
+              ) {
+                // Sincronizar memberOf se estiver faltando ou desatualizado
+                const memberOf = profileData.offices.map((o) => o.id);
+                await updateDoc(profileRef, { memberOf });
+                profileData.memberOf = memberOf;
               }
-            }
-            setUserProfile(profileData);
 
-            // Checar convites (apenas uma vez após login ou quando perfil muda?)
-            // Aqui fazemos dentro do snapshot para garantir que se o usuário recebeu um convite ele o veja
-            if (firebaseUser.email) {
-              try {
-                const invitesRef = collection(db, "officeInvites");
-                const qInvites = query(invitesRef, where("email", "==", firebaseUser.email));
-                const inviteSnap = await getDocs(qInvites);
-                
-                if (!inviteSnap.empty) {
-                  let updatedOffices = [...(profileData.offices || [])];
-                  let changed = false;
+              const currentOffice = profileData.offices?.find(
+                (o) => o.id === (profileData.officeId || profileData.id),
+              );
+              if (currentOffice) {
+                const needsSync =
+                  profileData.role !== currentOffice.role ||
+                  profileData.sector !==
+                    (currentOffice.sector || Sector.GENERAL);
 
-                  for (const docInvite of inviteSnap.docs) {
-                    const invite = docInvite.data() as any;
-                    if (!updatedOffices.some(o => o.id === invite.officeId)) {
-                      updatedOffices.push({ 
-                        id: invite.officeId, 
-                        name: invite.officeName, 
-                        role: invite.role,
-                        sector: invite.sector || Sector.GENERAL
-                      });
-                      changed = true;
-                    }
-                    await deleteDoc(docInvite.ref);
-                  }
-
-                  if (changed) {
-                    const memberOf = updatedOffices.map(o => o.id);
-                    await updateDoc(profileRef, { 
-                      offices: updatedOffices,
-                      memberOf
-                    });
-                  }
-                }
-              } catch (e) {
-                console.error("Erro no processamento de convites:", e);
-              }
-            }
-          } else {
-            // Perfil inicial para novo usuário - Checar se já possui convites pendentes
-            let initialOffices: any[] = [];
-            let initialOfficeId = firebaseUser.uid;
-            let initialRole = UserRole.ADMIN;
-            let initialSector = Sector.GENERAL;
-
-            if (firebaseUser.email) {
-              try {
-                const invitesRef = collection(db, "officeInvites");
-                const qInvites = query(invitesRef, where("email", "==", firebaseUser.email));
-                const inviteSnap = await getDocs(qInvites);
-                
-                if (!inviteSnap.empty) {
-                  const inviteDocs = inviteSnap.docs;
-                  for (const docInvite of inviteDocs) {
-                    const invite = docInvite.data() as any;
-                    initialOffices.push({
-                      id: invite.officeId,
-                      name: invite.officeName,
-                      role: invite.role,
-                      sector: invite.sector || Sector.GENERAL
-                    });
-                    await deleteDoc(docInvite.ref);
-                  }
-                  // Definir o primeiro convite como escritório ativo
-                  initialOfficeId = initialOffices[0].id;
-                  initialRole = initialOffices[0].role;
-                  initialSector = initialOffices[0].sector;
+                if (needsSync) {
+                  profileData.role = currentOffice.role;
+                  profileData.sector = currentOffice.sector || Sector.GENERAL;
+                  await updateDoc(profileRef, {
+                    role: profileData.role,
+                    sector: profileData.sector,
+                  });
                 } else {
-                  // Se não tiver convites, cria o escritório próprio padrão
-                  initialOffices = [{ 
-                    id: firebaseUser.uid, 
-                    name: firebaseUser.email || "Meu Escritório", 
-                    role: UserRole.ADMIN, 
-                    sector: Sector.GENERAL 
-                  }];
+                  profileData.role = currentOffice.role;
+                  profileData.sector = currentOffice.sector || Sector.GENERAL;
                 }
-              } catch (e) {
-                console.error("Erro ao buscar convites iniciais:", e);
-                initialOffices = [{ id: firebaseUser.uid, name: "Meu Escritório", role: UserRole.ADMIN, sector: Sector.GENERAL }];
+              }
+              setUserProfile(profileData);
+
+              // Checar convites (apenas uma vez após login ou quando perfil muda?)
+              // Aqui fazemos dentro do snapshot para garantir que se o usuário recebeu um convite ele o veja
+              if (firebaseUser.email) {
+                try {
+                  const invitesRef = collection(db, "officeInvites");
+                  const qInvites = query(
+                    invitesRef,
+                    where("email", "==", firebaseUser.email),
+                  );
+                  const inviteSnap = await getDocs(qInvites);
+
+                  if (!inviteSnap.empty) {
+                    let updatedOffices = [...(profileData.offices || [])];
+                    let changed = false;
+
+                    for (const docInvite of inviteSnap.docs) {
+                      const invite = docInvite.data() as any;
+                      if (
+                        !updatedOffices.some((o) => o.id === invite.officeId)
+                      ) {
+                        updatedOffices.push({
+                          id: invite.officeId,
+                          name: invite.officeName,
+                          role: invite.role,
+                          sector: invite.sector || Sector.GENERAL,
+                        });
+                        changed = true;
+                      }
+                      await deleteDoc(docInvite.ref);
+                    }
+
+                    if (changed) {
+                      const memberOf = updatedOffices.map((o) => o.id);
+                      await updateDoc(profileRef, {
+                        offices: updatedOffices,
+                        memberOf,
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.error("Erro no processamento de convites:", e);
+                }
               }
             } else {
-              initialOffices = [{ id: firebaseUser.uid, name: "Meu Escritório", role: UserRole.ADMIN, sector: Sector.GENERAL }];
-            }
+              // Perfil inicial para novo usuário - Checar se já possui convites pendentes
+              let initialOffices: any[] = [];
+              let initialOfficeId = firebaseUser.uid;
+              let initialRole = UserRole.ADMIN;
+              let initialSector = Sector.GENERAL;
 
-            const newProfile: UserProfile = {
-              id: firebaseUser.uid,
-              email: firebaseUser.email || "",
-              name: firebaseUser.displayName || "Usuário",
-              role: initialRole,
-              sector: initialSector,
-              officeId: initialOfficeId,
-              offices: initialOffices,
-              memberOf: initialOffices.map(o => o.id),
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(profileRef, newProfile);
-            setUserProfile(newProfile);
-          }
-          setAuthLoading(false);
-        });
+              if (firebaseUser.email) {
+                try {
+                  const invitesRef = collection(db, "officeInvites");
+                  const qInvites = query(
+                    invitesRef,
+                    where("email", "==", firebaseUser.email),
+                  );
+                  const inviteSnap = await getDocs(qInvites);
+
+                  if (!inviteSnap.empty) {
+                    const inviteDocs = inviteSnap.docs;
+                    for (const docInvite of inviteDocs) {
+                      const invite = docInvite.data() as any;
+                      initialOffices.push({
+                        id: invite.officeId,
+                        name: invite.officeName,
+                        role: invite.role,
+                        sector: invite.sector || Sector.GENERAL,
+                      });
+                      await deleteDoc(docInvite.ref);
+                    }
+                    // Definir o primeiro convite como escritório ativo
+                    initialOfficeId = initialOffices[0].id;
+                    initialRole = initialOffices[0].role;
+                    initialSector = initialOffices[0].sector;
+                  } else {
+                    // Se não tiver convites, cria o escritório próprio padrão
+                    initialOffices = [
+                      {
+                        id: firebaseUser.uid,
+                        name: firebaseUser.email || "Meu Escritório",
+                        role: UserRole.ADMIN,
+                        sector: Sector.GENERAL,
+                      },
+                    ];
+                  }
+                } catch (e) {
+                  console.error("Erro ao buscar convites iniciais:", e);
+                  initialOffices = [
+                    {
+                      id: firebaseUser.uid,
+                      name: "Meu Escritório",
+                      role: UserRole.ADMIN,
+                      sector: Sector.GENERAL,
+                    },
+                  ];
+                }
+              } else {
+                initialOffices = [
+                  {
+                    id: firebaseUser.uid,
+                    name: "Meu Escritório",
+                    role: UserRole.ADMIN,
+                    sector: Sector.GENERAL,
+                  },
+                ];
+              }
+
+              const newProfile: UserProfile = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                name: firebaseUser.displayName || "Usuário",
+                role: initialRole,
+                sector: initialSector,
+                officeId: initialOfficeId,
+                offices: initialOffices,
+                memberOf: initialOffices.map((o) => o.id),
+                createdAt: new Date().toISOString(),
+              };
+              await setDoc(profileRef, newProfile);
+              setUserProfile(newProfile);
+            }
+            setAuthLoading(false);
+          },
+        );
       } else {
         setUser(null);
         setUserProfile(null);
@@ -3308,7 +3922,8 @@ export default function App() {
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeProfileSnapshot) (unsubscribeProfileSnapshot as () => void)();
+      if (unsubscribeProfileSnapshot)
+        (unsubscribeProfileSnapshot as () => void)();
     };
   }, []);
 
@@ -3322,17 +3937,21 @@ export default function App() {
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        const profiles = snap.docs.map((doc) => {
-          const data = doc.data() as UserProfile;
-          // Important: We need to show the role/sector for THIS office
-          const officeInfo = data.offices?.find(o => o.id === userProfile.officeId);
-          return {
-            ...data,
-            id: doc.id,
-            role: officeInfo?.role || data.role,
-            sector: officeInfo?.sector || data.sector
-          };
-        }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        const profiles = snap.docs
+          .map((doc) => {
+            const data = doc.data() as UserProfile;
+            // Important: We need to show the role/sector for THIS office
+            const officeInfo = data.offices?.find(
+              (o) => o.id === userProfile.officeId,
+            );
+            return {
+              ...data,
+              id: doc.id,
+              role: officeInfo?.role || data.role,
+              sector: officeInfo?.sector || data.sector,
+            };
+          })
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         setTeamProfiles(profiles as UserProfile[]);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, "userProfiles"),
@@ -3345,13 +3964,17 @@ export default function App() {
     if (!userProfile || userProfile.role !== UserRole.ADMIN) return;
     const q = query(
       collection(db, "officeInvites"),
-      where("officeId", "==", userProfile.officeId)
+      where("officeId", "==", userProfile.officeId),
     );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setPendingInvites(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Erro na sincronização de convites:", err);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setPendingInvites(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      (err) => {
+        console.error("Erro na sincronização de convites:", err);
+      },
+    );
     return () => unsubscribe();
   }, [userProfile]);
 
@@ -3363,7 +3986,7 @@ export default function App() {
     }
     setSubscriptionLoading(true);
     const subRef = doc(db, "officeSubscriptions", userProfile.officeId);
-    
+
     const unsubscribe = onSnapshot(
       subRef,
       async (docSnap) => {
@@ -3375,7 +3998,11 @@ export default function App() {
           try {
             const newSub = {
               officeId: userProfile.officeId,
-              officeName: userProfile.offices?.find(o => o.id === userProfile.officeId)?.name || userProfile.name || "Meu Escritório",
+              officeName:
+                userProfile.offices?.find((o) => o.id === userProfile.officeId)
+                  ?.name ||
+                userProfile.name ||
+                "Meu Escritório",
               ownerId: user.uid,
               ownerEmail: user.email || "",
               status: "PENDING_CHOICE",
@@ -3384,7 +4011,7 @@ export default function App() {
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             };
-            
+
             await setDoc(subRef, newSub);
             setCurrentSubscription(newSub);
           } catch (e) {
@@ -3397,7 +4024,7 @@ export default function App() {
       (err) => {
         console.error("Erro na leitura de faturamento:", err);
         setSubscriptionLoading(false);
-      }
+      },
     );
     return () => unsubscribe();
   }, [user, userProfile?.officeId]);
@@ -3417,7 +4044,8 @@ export default function App() {
             responsaveis: data.responsaveis || INITIAL_RESPONSAVEIS,
             pecas: data.pecas || INITIAL_PECAS,
             empresas: data.empresas || INITIAL_EMPRESAS,
-            categoriasTarefas: data.categoriasTarefas || Object.values(AdminTaskCategory),
+            categoriasTarefas:
+              data.categoriasTarefas || Object.values(AdminTaskCategory),
             rules: data.rules || [],
           }));
           setPermissionError(null);
@@ -3476,7 +4104,9 @@ export default function App() {
       (err) => {
         console.error("Monitored Processes Listener Error:", err);
         if (err.message.includes("index")) {
-          console.warn("Missing Firestore Index. Please check console for the link to create it.");
+          console.warn(
+            "Missing Firestore Index. Please check console for the link to create it.",
+          );
         }
         handleFirestoreError(err, OperationType.LIST, "monitoredProcesses");
       },
@@ -3490,7 +4120,7 @@ export default function App() {
 
     const q = query(
       collection(db, "publications"),
-      where("officeId", "==", userProfile.officeId)
+      where("officeId", "==", userProfile.officeId),
     );
 
     const unsubscribe = onSnapshot(
@@ -3501,8 +4131,12 @@ export default function App() {
           ...doc.data(),
         })) as DjenPublication[];
         pubs.sort((a, b) => {
-          const dateA = new Date(a.dataDisponibilizacao || a.dataPublicacao || 0).getTime();
-          const dateB = new Date(b.dataDisponibilizacao || b.dataPublicacao || 0).getTime();
+          const dateA = new Date(
+            a.dataDisponibilizacao || a.dataPublicacao || 0,
+          ).getTime();
+          const dateB = new Date(
+            b.dataDisponibilizacao || b.dataPublicacao || 0,
+          ).getTime();
           return dateB - dateA;
         });
         setPublications(pubs);
@@ -3510,7 +4144,7 @@ export default function App() {
       (err) => {
         console.error("Publications Listener Error:", err);
         handleFirestoreError(err, OperationType.LIST, "publications");
-      }
+      },
     );
     return () => unsubscribe();
   }, [userProfile]);
@@ -3540,7 +4174,10 @@ export default function App() {
       } else {
         q = firestoreQuery(q, where("sector", "==", userProfile.sector));
       }
-    } else if (userProfile.role === UserRole.LAWYER || userProfile.role === UserRole.INTERN) {
+    } else if (
+      userProfile.role === UserRole.LAWYER ||
+      userProfile.role === UserRole.INTERN
+    ) {
       q = firestoreQuery(
         q,
         or(
@@ -3591,7 +4228,10 @@ export default function App() {
       } else {
         q = firestoreQuery(q, where("sector", "==", userProfile.sector));
       }
-    } else if (userProfile.role === UserRole.LAWYER || userProfile.role === UserRole.INTERN) {
+    } else if (
+      userProfile.role === UserRole.LAWYER ||
+      userProfile.role === UserRole.INTERN
+    ) {
       q = firestoreQuery(
         q,
         or(
@@ -3683,7 +4323,7 @@ export default function App() {
   // Sync Correspondência
   useEffect(() => {
     if (!user) return;
-    
+
     // Agora usamos officeId se disponível para compartilhamento no escritório
     const docId = userProfile?.officeId || user.uid;
     const oficioRef = doc(db, "correspondence", docId);
@@ -3708,7 +4348,11 @@ export default function App() {
                 const individualSnap = await getDoc(individualRef);
                 if (individualSnap.exists()) {
                   const data = individualSnap.data() as any;
-                  await setDoc(oficioRef, { ...data, officeId: userProfile?.officeId }, { merge: true });
+                  await setDoc(
+                    oficioRef,
+                    { ...data, officeId: userProfile?.officeId },
+                    { merge: true },
+                  );
                   return;
                 }
               }
@@ -3717,12 +4361,20 @@ export default function App() {
               const emailSnap = await getDoc(emailRef);
               if (emailSnap.exists()) {
                 const data = emailSnap.data() as any;
-                await setDoc(oficioRef, { ...data, officeId: userProfile?.officeId }, { merge: true });
+                await setDoc(
+                  oficioRef,
+                  { ...data, officeId: userProfile?.officeId },
+                  { merge: true },
+                );
               } else {
                 // Cria novo se não existir nada
                 await setDoc(
                   oficioRef,
-                  { oficio: [], memorando: [], officeId: userProfile?.officeId },
+                  {
+                    oficio: [],
+                    memorando: [],
+                    officeId: userProfile?.officeId,
+                  },
                   { merge: true },
                 );
               }
@@ -3874,7 +4526,7 @@ export default function App() {
         userProfile.role === UserRole.COORDINATOR;
       if (!isAuthorized) {
         alert(
-          "Apenas coordenadores e administradores possuem autorização para desmarcar ou liberar um número reservado."
+          "Apenas coordenadores e administradores possuem autorização para desmarcar ou liberar um número reservado.",
         );
         return;
       }
@@ -3882,7 +4534,7 @@ export default function App() {
       const confirmRelease = confirm(
         `Deseja realmente desmarcar o ${
           category === "oficio" ? "Ofício" : "Memorando"
-        } Nº ${num.toString().padStart(3, "0")}?`
+        } Nº ${num.toString().padStart(3, "0")}?`,
       );
       if (!confirmRelease) return;
 
@@ -3903,7 +4555,7 @@ export default function App() {
             [detailField]: currentDetails,
             officeId: userProfile.officeId,
           },
-          { merge: true }
+          { merge: true },
         );
       } catch (err: any) {
         alert("Erro ao remover reserva.");
@@ -3919,39 +4571,45 @@ export default function App() {
   const handleSaveCorrespondenceLink = async (
     num: number,
     category: "oficio" | "memorando",
-    deadline: Deadline
+    deadline: Deadline,
   ) => {
     if (!user || !userProfile) return;
     const currentList =
       category === "oficio" ? usedOficioNumbers : usedMemorandoNumbers;
-    
+
     if (currentList.includes(num)) {
       alert("Este número já está em uso.");
       return;
     }
 
     const updatedList = [...currentList, num].sort((a, b) => a - b);
-    const detailField = category === "oficio" ? "oficioDetails" : "memorandoDetails";
-    
-    const currentDetails = category === "oficio" ? { ...oficioDetails } : { ...memorandoDetails };
+    const detailField =
+      category === "oficio" ? "oficioDetails" : "memorandoDetails";
+
+    const currentDetails =
+      category === "oficio" ? { ...oficioDetails } : { ...memorandoDetails };
     currentDetails[num] = {
       reservedBy: user.uid,
       userName: userProfile.name || user.email || "Membro",
       deadlineId: deadline.id,
       deadlinePeca: deadline.peca,
       deadlineEmpresa: deadline.empresa,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     try {
       const docId = userProfile.officeId || user.uid;
       const oficioRef = doc(db, "correspondence", docId);
-      await setDoc(oficioRef, { 
-        [category]: updatedList, 
-        [detailField]: currentDetails,
-        officeId: userProfile.officeId 
-      }, { merge: true });
-      
+      await setDoc(
+        oficioRef,
+        {
+          [category]: updatedList,
+          [detailField]: currentDetails,
+          officeId: userProfile.officeId,
+        },
+        { merge: true },
+      );
+
       setLinkingNumber(null);
       setSelectedDeadlineForLink(null);
       setDeadlineSearchTerm("");
@@ -4019,7 +4677,8 @@ export default function App() {
 
   const resetAdminTaskForm = () => {
     setNewAdminTask({
-      category: dynamicSettings.categoriasTarefas?.[0] || AdminTaskCategory.MEETING,
+      category:
+        dynamicSettings.categoriasTarefas?.[0] || AdminTaskCategory.MEETING,
       title: "",
       description: "",
       date: formatDateToISO(new Date()),
@@ -4028,7 +4687,7 @@ export default function App() {
       sector: userProfile?.sector || Sector.GENERAL,
       alerts: [],
       isRecurring: false,
-      recurrenceType: 'DAILY',
+      recurrenceType: "DAILY",
       recurrenceEndDate: "",
     });
     setEditingAdminTaskId(null);
@@ -4079,14 +4738,16 @@ export default function App() {
         return;
       }
 
-      // Generate a temporary ID or wait for them to join? 
+      // Generate a temporary ID or wait for them to join?
       // Let's create a pending profile or just assume the admin knows the UID?
       // Better strategy: Admin enters details, and when the user logs in, they are matched by email.
       // But rules require known ID. For simplicity, we'll use email as doc ID if UID not known?
       // No, let's use a random ID for now or a specific collection for invites.
       // For this demo, let's just allow the admin to change roles of already joined members.
 
-      alert("Funcionalidade: Membros devem se cadastrar primeiro. O administrador então altera o cargo deles na lista da equipe.");
+      alert(
+        "Funcionalidade: Membros devem se cadastrar primeiro. O administrador então altera o cargo deles na lista da equipe.",
+      );
       setIsAddUserModalOpen(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, "userProfiles");
@@ -4116,16 +4777,17 @@ export default function App() {
   ) => {
     if (!userProfile || !canManageMember(member.role, member.sector)) return;
     try {
-      const updatedOffices = member.offices?.map(o => 
-        o.id === userProfile.officeId ? { ...o, role, sector } : o
-      ) || [];
-      const memberOf = updatedOffices.map(o => o.id);
+      const updatedOffices =
+        member.offices?.map((o) =>
+          o.id === userProfile.officeId ? { ...o, role, sector } : o,
+        ) || [];
+      const memberOf = updatedOffices.map((o) => o.id);
 
-      await updateDoc(doc(db, "userProfiles", member.id), { 
-        role, 
+      await updateDoc(doc(db, "userProfiles", member.id), {
+        role,
         sector,
         offices: updatedOffices,
-        memberOf
+        memberOf,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, "userProfiles");
@@ -4160,7 +4822,9 @@ export default function App() {
   const handleSwitchOffice = async (officeId: string) => {
     if (!user || !userProfile) return;
     try {
-      const selectedOffice = userProfile.offices?.find((o) => o.id === officeId);
+      const selectedOffice = userProfile.offices?.find(
+        (o) => o.id === officeId,
+      );
       if (!selectedOffice) return;
 
       const profileRef = doc(db, "userProfiles", user.uid);
@@ -4178,7 +4842,14 @@ export default function App() {
       setDynamicSettings(DEFAULT_SETTINGS);
 
       setUserProfile((prev) =>
-        prev ? { ...prev, officeId, role: selectedOffice.role, sector: selectedOffice.sector || Sector.GENERAL } : null,
+        prev
+          ? {
+              ...prev,
+              officeId,
+              role: selectedOffice.role,
+              sector: selectedOffice.sector || Sector.GENERAL,
+            }
+          : null,
       );
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, "userProfiles");
@@ -4187,28 +4858,40 @@ export default function App() {
 
   const handleInviteMember = async () => {
     if (!user || !userProfile || !newUserEmail) return;
-    
+
     // Check permission
     const isAdmin = userProfile.role === UserRole.ADMIN;
     const isCoordinator = userProfile.role === UserRole.COORDINATOR;
-    
+
     if (!isAdmin && !isCoordinator) return;
-    
+
     // Restrictions for Coordinator
     if (isCoordinator) {
-      if (newUserRole === UserRole.ADMIN || newUserRole === UserRole.COORDINATOR) {
-        alert("Coordenadores não podem convidar Administradores ou outros Coordenadores.");
+      if (
+        newUserRole === UserRole.ADMIN ||
+        newUserRole === UserRole.COORDINATOR
+      ) {
+        alert(
+          "Coordenadores não podem convidar Administradores ou outros Coordenadores.",
+        );
         return;
       }
       if (newUserSector !== userProfile.sector) {
-        alert(`Você só pode convidar membros para o setor ${userProfile.sector}.`);
+        alert(
+          `Você só pode convidar membros para o setor ${userProfile.sector}.`,
+        );
         return;
       }
     }
 
     try {
-      const activeOffice = userProfile.offices?.find(o => o.id === userProfile.officeId);
-      const officeName = dynamicSettings.officeName || activeOffice?.name || "Escritório Compartilhado";
+      const activeOffice = userProfile.offices?.find(
+        (o) => o.id === userProfile.officeId,
+      );
+      const officeName =
+        dynamicSettings.officeName ||
+        activeOffice?.name ||
+        "Escritório Compartilhado";
 
       await addDoc(collection(db, "officeInvites"), {
         email: newUserEmail,
@@ -4217,7 +4900,7 @@ export default function App() {
         role: newUserRole,
         sector: newUserSector,
         invitedBy: user.uid,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       });
 
       alert(`Convite enviado para ${newUserEmail}`);
@@ -4231,18 +4914,23 @@ export default function App() {
   const handleCreateNewOffice = async (name: string) => {
     if (!user || !userProfile) return;
     const newOfficeId = `office-${Date.now()}`;
-    const newOfficeEntry = { id: newOfficeId, name, role: UserRole.ADMIN, sector: Sector.GENERAL };
-    
+    const newOfficeEntry = {
+      id: newOfficeId,
+      name,
+      role: UserRole.ADMIN,
+      sector: Sector.GENERAL,
+    };
+
     try {
       const profileRef = doc(db, "userProfiles", user.uid);
       const updatedOffices = [...(userProfile.offices || []), newOfficeEntry];
-      const memberOf = updatedOffices.map(o => o.id);
-      
+      const memberOf = updatedOffices.map((o) => o.id);
+
       // Criar a assinatura em officeSubscriptions com 30 dias de trial gratuito
       const defaultExpiry = new Date();
       defaultExpiry.setDate(defaultExpiry.getDate() + 30);
       const subRef = doc(db, "officeSubscriptions", newOfficeId);
-      
+
       await setDoc(subRef, {
         officeId: newOfficeId,
         officeName: name.trim(),
@@ -4255,21 +4943,27 @@ export default function App() {
         updatedAt: new Date().toISOString(),
       });
 
-      await updateDoc(profileRef, { 
+      await updateDoc(profileRef, {
         offices: updatedOffices,
         memberOf,
         officeId: newOfficeId,
-        role: UserRole.ADMIN
+        role: UserRole.ADMIN,
       });
 
-      setUserProfile(prev => prev ? { 
-        ...prev, 
-        offices: updatedOffices, 
-        officeId: newOfficeId, 
-        role: UserRole.ADMIN 
-      } : null);
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              offices: updatedOffices,
+              officeId: newOfficeId,
+              role: UserRole.ADMIN,
+            }
+          : null,
+      );
 
-      alert(`Novo escritório "${name}" criado com sucesso! Inicializado com 30 dias de Trial.`);
+      alert(
+        `Novo escritório "${name}" criado com sucesso! Inicializado com 30 dias de Trial.`,
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, "userProfiles");
     }
@@ -4349,7 +5043,8 @@ export default function App() {
                       className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-100/55 transition-all flex items-center gap-2"
                       title="Sincronizar Permissões da Equipe"
                     >
-                      <Icons.ShieldCheck className="w-3.5 h-3.5" /> SINCRONIZAR DADOS
+                      <Icons.ShieldCheck className="w-3.5 h-3.5" /> SINCRONIZAR
+                      DADOS
                     </button>
                   </>
                 )}
@@ -4396,7 +5091,9 @@ export default function App() {
                           <span className="font-black text-slate-900 text-xs md:text-sm uppercase tracking-tight flex items-center gap-2">
                             {member.name || "Sem Nome"}
                             {member.id === userProfile?.id && (
-                              <span className="bg-emerald-500 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter shadow-sm">Você</span>
+                              <span className="bg-emerald-500 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter shadow-sm">
+                                Você
+                              </span>
                             )}
                           </span>
                           <span className="text-[10px] font-bold text-slate-400">
@@ -4435,8 +5132,8 @@ export default function App() {
                       ) : (
                         <span
                           className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider ${
-                            member.role === UserRole.ADMIN 
-                              ? "bg-red-100 text-red-600" 
+                            member.role === UserRole.ADMIN
+                              ? "bg-red-100 text-red-600"
                               : "bg-blue-100 text-blue-600"
                           }`}
                         >
@@ -4505,9 +5202,12 @@ export default function App() {
                     </td>
                   </tr>
                 ))}
-                
+
                 {pendingInvites.map((invite) => (
-                  <tr key={invite.id} className="bg-amber-50/20 border border-amber-100 rounded-xl animate-pulse">
+                  <tr
+                    key={invite.id}
+                    className="bg-amber-50/20 border border-amber-100 rounded-xl animate-pulse"
+                  >
                     <td className="px-4 py-3 rounded-l-xl">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-black text-xs shrink-0 border border-amber-200">
@@ -4539,11 +5239,16 @@ export default function App() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right rounded-r-xl">
-                      {canManageMember(invite.role as UserRole, invite.sector as Sector) && (
-                        <button 
+                      {canManageMember(
+                        invite.role as UserRole,
+                        invite.sector as Sector,
+                      ) && (
+                        <button
                           onClick={async () => {
                             try {
-                              await deleteDoc(doc(db, "officeInvites", invite.id));
+                              await deleteDoc(
+                                doc(db, "officeInvites", invite.id),
+                              );
                             } catch (e) {
                               console.error(e);
                             }
@@ -4570,39 +5275,58 @@ export default function App() {
     try {
       let finalResponsavel = userProfile?.name || "";
       if (newDeadline.assignedTo) {
-        const assignedUser = teamProfiles.find(t => t.id === newDeadline.assignedTo);
+        const assignedUser = teamProfiles.find(
+          (t) => t.id === newDeadline.assignedTo,
+        );
         if (assignedUser) finalResponsavel = assignedUser.name;
       }
 
       if (editingDeadlineId) {
-        const oldDeadline = deadlines.find(d => d.id === editingDeadlineId);
+        const oldDeadline = deadlines.find((d) => d.id === editingDeadlineId);
         const { id, ...updateData } = newDeadline as Deadline;
-        
+
         const changes: string[] = [];
         if (oldDeadline) {
           if (oldDeadline.peca !== newDeadline.peca) {
-            changes.push(`Atividade Processual alterada de "${oldDeadline.peca || ''}" para "${newDeadline.peca || ''}"`);
+            changes.push(
+              `Atividade Processual alterada de "${oldDeadline.peca || ""}" para "${newDeadline.peca || ""}"`,
+            );
           }
           if (oldDeadline.responsavel !== finalResponsavel) {
-            changes.push(`Responsável alterado de "${oldDeadline.responsavel || ''}" para "${finalResponsavel || ''}"`);
+            changes.push(
+              `Responsável alterado de "${oldDeadline.responsavel || ""}" para "${finalResponsavel || ""}"`,
+            );
           }
           if (oldDeadline.empresa !== newDeadline.empresa) {
-            changes.push(`Cliente alterado de "${oldDeadline.empresa || ''}" para "${newDeadline.empresa || ''}"`);
+            changes.push(
+              `Cliente alterado de "${oldDeadline.empresa || ""}" para "${newDeadline.empresa || ""}"`,
+            );
           }
           if (oldDeadline.data !== newDeadline.data) {
-            changes.push(`Data de Vencimento alterada de "${oldDeadline.data || ''}" para "${newDeadline.data || ''}"`);
+            changes.push(
+              `Data de Vencimento alterada de "${oldDeadline.data || ""}" para "${newDeadline.data || ""}"`,
+            );
           }
-          if ((oldDeadline.hora || '') !== (newDeadline.hora || '')) {
-            changes.push(`Horário alterado de "${oldDeadline.hora || '--:--'}" para "${newDeadline.hora || '--:--'}"`);
+          if ((oldDeadline.hora || "") !== (newDeadline.hora || "")) {
+            changes.push(
+              `Horário alterado de "${oldDeadline.hora || "--:--"}" para "${newDeadline.hora || "--:--"}"`,
+            );
           }
           if (oldDeadline.assunto !== newDeadline.assunto) {
-            changes.push(`Assunto alterado de "${oldDeadline.assunto || ''}" para "${newDeadline.assunto || ''}"`);
+            changes.push(
+              `Assunto alterado de "${oldDeadline.assunto || ""}" para "${newDeadline.assunto || ""}"`,
+            );
           }
-          if ((oldDeadline.instituicao || '') !== (newDeadline.instituicao || '')) {
-            changes.push(`Órgão alterado de "${oldDeadline.instituicao || ''}" para "${newDeadline.instituicao || ''}"`);
+          if (
+            (oldDeadline.instituicao || "") !== (newDeadline.instituicao || "")
+          ) {
+            changes.push(
+              `Órgão alterado de "${oldDeadline.instituicao || ""}" para "${newDeadline.instituicao || ""}"`,
+            );
           }
           const oldSec = oldDeadline.sector || Sector.GENERAL;
-          const newSec = newDeadline.sector || userProfile?.sector || Sector.GENERAL;
+          const newSec =
+            newDeadline.sector || userProfile?.sector || Sector.GENERAL;
           if (oldSec !== newSec) {
             changes.push(`Setor alterado de "${oldSec}" para "${newSec}"`);
           }
@@ -4615,7 +5339,7 @@ export default function App() {
             userId: user.uid,
             userName: userProfile?.name || "Membro",
             userRole: userProfile?.role || UserRole.LAWYER,
-            action: 'EDIT',
+            action: "EDIT",
             observation: changes.join("\n"),
             timestamp: new Date().toISOString(),
           });
@@ -4637,7 +5361,7 @@ export default function App() {
           userId: user.uid,
           userName: userProfile?.name || "Membro",
           userRole: userProfile?.role || UserRole.LAWYER,
-          action: 'CREATE',
+          action: "CREATE",
           observation: `Atividade Processual Cadastrada\n\nAssunto / Descrição:\n${newDeadline.assunto || "Nenhum assunto registrado."}`,
           timestamp: new Date().toISOString(),
         };
@@ -4679,25 +5403,25 @@ export default function App() {
       } else {
         if (newAdminTask.isRecurring && newAdminTask.recurrenceEndDate) {
           const dates: string[] = [];
-          const start = new Date(newAdminTask.date + 'T12:00:00');
-          const end = new Date(newAdminTask.recurrenceEndDate + 'T12:00:00');
-          
+          const start = new Date(newAdminTask.date + "T12:00:00");
+          const end = new Date(newAdminTask.recurrenceEndDate + "T12:00:00");
+
           if (start <= end) {
             let current = new Date(start);
             let count = 0;
             while (current <= end && count < 200) {
               const yr = current.getFullYear();
-              const mo = String(current.getMonth() + 1).padStart(2, '0');
-              const dy = String(current.getDate()).padStart(2, '0');
+              const mo = String(current.getMonth() + 1).padStart(2, "0");
+              const dy = String(current.getDate()).padStart(2, "0");
               dates.push(`${yr}-${mo}-${dy}`);
-              
-              if (newAdminTask.recurrenceType === 'DAILY') {
+
+              if (newAdminTask.recurrenceType === "DAILY") {
                 current.setDate(current.getDate() + 1);
-              } else if (newAdminTask.recurrenceType === 'WEEKLY') {
+              } else if (newAdminTask.recurrenceType === "WEEKLY") {
                 current.setDate(current.getDate() + 7);
-              } else if (newAdminTask.recurrenceType === 'MONTHLY') {
+              } else if (newAdminTask.recurrenceType === "MONTHLY") {
                 current.setMonth(current.getMonth() + 1);
-              } else if (newAdminTask.recurrenceType === 'ANNUALLY') {
+              } else if (newAdminTask.recurrenceType === "ANNUALLY") {
                 current.setFullYear(current.getFullYear() + 1);
               } else {
                 break;
@@ -4707,11 +5431,12 @@ export default function App() {
           }
 
           if (dates.length > 0) {
-            const promises = dates.map(dateStr => {
+            const promises = dates.map((dateStr) => {
               return addDoc(collection(db, "adminTasks"), {
                 ...newAdminTask,
                 date: dateStr,
-                sector: newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
+                sector:
+                  newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
                 userId: user.uid,
                 officeId: userProfile?.officeId || user.uid,
                 userEmail: user.email,
@@ -4723,7 +5448,8 @@ export default function App() {
           } else {
             await addDoc(collection(db, "adminTasks"), {
               ...newAdminTask,
-              sector: newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
+              sector:
+                newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
               userId: user.uid,
               officeId: userProfile?.officeId || user.uid,
               userEmail: user.email,
@@ -4734,7 +5460,8 @@ export default function App() {
         } else {
           await addDoc(collection(db, "adminTasks"), {
             ...newAdminTask,
-            sector: newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
+            sector:
+              newAdminTask.sector || userProfile?.sector || Sector.GENERAL,
             userId: user.uid,
             officeId: userProfile?.officeId || user.uid,
             userEmail: user.email,
@@ -4797,7 +5524,7 @@ export default function App() {
         typeof fieldOrUpdates === "string"
           ? { [fieldOrUpdates]: newValue }
           : fieldOrUpdates;
-      
+
       await setDoc(
         settingsRef,
         { ...updates, userId: user.uid, userEmail: user.email },
@@ -4807,11 +5534,15 @@ export default function App() {
       // Sincronizar nome do escritório no perfil do usuário para o seletor
       if (updates.officeName && userProfile.offices) {
         const profileRef = doc(db, "userProfiles", user.uid);
-        const updatedOffices = userProfile.offices.map(o => 
-          o.id === userProfile.officeId ? { ...o, name: updates.officeName } : o
+        const updatedOffices = userProfile.offices.map((o) =>
+          o.id === userProfile.officeId
+            ? { ...o, name: updates.officeName }
+            : o,
         );
         await updateDoc(profileRef, { offices: updatedOffices });
-        setUserProfile(prev => prev ? { ...prev, offices: updatedOffices } : null);
+        setUserProfile((prev) =>
+          prev ? { ...prev, offices: updatedOffices } : null,
+        );
       }
     } finally {
       setIsSavingSettings(false);
@@ -4829,15 +5560,24 @@ export default function App() {
       userId: user?.uid || "",
       userName: userProfile?.name || "Membro",
       userRole: userProfile?.role || UserRole.LAWYER,
-      action: 'EDIT',
+      action: "EDIT",
+      fromState: d.reviewState || ReviewState.NONE,
+      toState:
+        newS === DeadlineStatus.COMPLETED
+          ? ReviewState.COMPLETED
+          : ReviewState.NONE,
       observation: `Status do prazo alterado para ${newS === DeadlineStatus.COMPLETED ? "CONCLUÍDO" : "PENDENTE"}`,
       timestamp: new Date().toISOString(),
     };
     const updatedReviewLogs = [...(d.reviewLogs || []), newLogEntry];
 
-    await updateDoc(doc(db, "deadlines", d.id), { 
+    await updateDoc(doc(db, "deadlines", d.id), {
       status: newS,
-      reviewLogs: updatedReviewLogs 
+      reviewState:
+        newS === DeadlineStatus.COMPLETED
+          ? ReviewState.COMPLETED
+          : ReviewState.NONE,
+      reviewLogs: updatedReviewLogs,
     });
   };
 
@@ -4874,14 +5614,14 @@ export default function App() {
     setIsAddingAnnotation(true);
     try {
       const deadlineRef = doc(db, "deadlines", deadlineId);
-      const deadlineDoc = deadlines.find(d => d.id === deadlineId);
+      const deadlineDoc = deadlines.find((d) => d.id === deadlineId);
       if (deadlineDoc) {
         const newLogEntry: ReviewLogEntry = {
           id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           userId: user.uid,
           userName: userProfile?.name || "Membro",
           userRole: userProfile?.role || UserRole.LAWYER,
-          action: 'ANNOTATION',
+          action: "ANNOTATION",
           observation: newAnnotationText.trim(),
           timestamp: new Date().toISOString(),
         };
@@ -4889,17 +5629,21 @@ export default function App() {
         await updateDoc(deadlineRef, {
           reviewLogs: updatedLogs,
         });
-        
-        if (selectedAppointment && selectedAppointment.type === "deadline" && (selectedAppointment.data as Deadline).id === deadlineId) {
+
+        if (
+          selectedAppointment &&
+          selectedAppointment.type === "deadline" &&
+          (selectedAppointment.data as Deadline).id === deadlineId
+        ) {
           setSelectedAppointment({
             ...selectedAppointment,
             data: {
               ...deadlineDoc,
-              reviewLogs: updatedLogs
-            }
+              reviewLogs: updatedLogs,
+            },
           });
         }
-        
+
         setNewAnnotationText("");
       }
     } catch (err) {
@@ -4925,45 +5669,77 @@ export default function App() {
 
   // --- Gestão de Tempo / Time Tracking Functions ---
 
-  const handleStartTimerForDeadline = async (deadline: Deadline, activityType: string = "Elaboração de Peça") => {
+  const handleStartTimerForDeadline = async (
+    deadline: Deadline,
+    activityType: string = "Elaboração de Peça",
+  ) => {
     if (!userProfile) return;
 
     const currentReviewState = deadline.reviewState || ReviewState.NONE;
 
-    if (currentReviewState === ReviewState.WAITING_COORDINATOR || currentReviewState === ReviewState.REVIEWING_COORDINATOR || currentReviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR) {
-      if (userProfile.role !== UserRole.COORDINATOR && userProfile.role !== UserRole.ADMIN) {
-        alert("Apenas coordenadores e administradores podem iniciar o cronômetro nesta etapa de revisão.");
+    if (
+      currentReviewState === ReviewState.WAITING_COORDINATOR ||
+      currentReviewState === ReviewState.REVIEWING_COORDINATOR ||
+      currentReviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
+    ) {
+      if (
+        userProfile.role !== UserRole.COORDINATOR &&
+        userProfile.role !== UserRole.ADMIN
+      ) {
+        setTimerStartError(
+          "Apenas coordenadores e administradores podem iniciar o cronômetro nesta etapa de revisão.",
+        );
         return;
       }
       if (currentReviewState === ReviewState.WAITING_COORDINATOR) {
-         try {
-           await updateDoc(doc(db, "deadlines", deadline.id), { reviewState: ReviewState.REVIEWING_COORDINATOR });
-         } catch (e) {
-           console.error(e);
-         }
+        try {
+          await updateDoc(doc(db, "deadlines", deadline.id), {
+            reviewState: ReviewState.REVIEWING_COORDINATOR,
+          });
+        } catch (e) {
+          console.error(e);
+        }
       }
-    } else if (currentReviewState === ReviewState.WAITING_ADMIN || currentReviewState === ReviewState.REVIEWING_ADMIN) {
+    } else if (
+      currentReviewState === ReviewState.WAITING_ADMIN ||
+      currentReviewState === ReviewState.REVIEWING_ADMIN
+    ) {
       if (userProfile.role !== UserRole.ADMIN) {
-        alert("Apenas administradores podem iniciar o cronômetro nesta etapa de validação.");
+        setTimerStartError(
+          "Apenas administradores podem iniciar o cronômetro nesta etapa de validação.",
+        );
         return;
       }
       if (currentReviewState === ReviewState.WAITING_ADMIN) {
-         try {
-           await updateDoc(doc(db, "deadlines", deadline.id), { reviewState: ReviewState.REVIEWING_ADMIN });
-         } catch (e) {
-           console.error(e);
-         }
+        try {
+          await updateDoc(doc(db, "deadlines", deadline.id), {
+            reviewState: ReviewState.REVIEWING_ADMIN,
+          });
+        } catch (e) {
+          console.error(e);
+        }
       }
-    } else if (currentReviewState === ReviewState.COMPLETED) {
-       alert("Esta tarefa já foi concluída e não pode ser cronometrada.");
-       return;
+    } else if (
+      currentReviewState === ReviewState.COMPLETED ||
+      deadline.status === DeadlineStatus.COMPLETED
+    ) {
+      setTimerStartError(
+        "Esta tarefa já foi concluída e não pode ser cronometrada.",
+      );
+      return;
     }
 
     // 1. Pause all other running timers
     const updatedTimers = activeTimers.map((t) => {
       if (t.isPlaying && t.lastStartedAt) {
-        const secondsVal = t.elapsedSeconds + (Date.now() - t.lastStartedAt) / 1000;
-        return { ...t, isPlaying: false, lastStartedAt: null, elapsedSeconds: secondsVal };
+        const secondsVal =
+          t.elapsedSeconds + (Date.now() - t.lastStartedAt) / 1000;
+        return {
+          ...t,
+          isPlaying: false,
+          lastStartedAt: null,
+          elapsedSeconds: secondsVal,
+        };
       }
       return t;
     });
@@ -4983,8 +5759,10 @@ export default function App() {
       updatedTimers[idx].lastStartedAt = Date.now();
       updatedTimers[idx].activityType = activityType;
       updatedTimers[idx].reviewState = targetReviewState;
-      updatedTimers[idx].assignedTo = deadline.assignedTo || updatedTimers[idx].assignedTo || "";
-      updatedTimers[idx].userId = deadline.userId || updatedTimers[idx].userId || "";
+      updatedTimers[idx].assignedTo =
+        deadline.assignedTo || updatedTimers[idx].assignedTo || "";
+      updatedTimers[idx].userId =
+        deadline.userId || updatedTimers[idx].userId || "";
     } else {
       // Add a clean new timer
       updatedTimers.push({
@@ -5036,7 +5814,7 @@ export default function App() {
     // Set structure for confirm/stop modal
     setTimerToStop(timer);
     setStopTimerError("");
-    
+
     // Auto populate submission/stop forms
     const defaultStatus = TimeLogStatus.APPROVED;
 
@@ -5052,100 +5830,170 @@ export default function App() {
     setIsStopTimerModalOpen(true);
   };
 
-  const handleDirectReviewAction = async (deadline: Deadline, reviewAction: 'RETURN' | 'COMPLETE' | 'FORWARD') => {
+  const handleDiscardTimer = (deadlineId: string) => {
+    setActiveTimers((cur) => cur.filter((t) => t.deadlineId !== deadlineId));
+    setIsStopTimerModalOpen(false);
+    setTimerToStop(null);
+  };
+
+  const handleLogManualTimeForDeadline = (
+    deadline: Deadline,
+    durationSeconds: number,
+  ) => {
+    const currentReviewState = deadline.reviewState || ReviewState.NONE;
+    if (
+      currentReviewState === ReviewState.COMPLETED ||
+      deadline.status === DeadlineStatus.COMPLETED
+    ) {
+      setTimerStartError(
+        "Esta tarefa já foi concluída e não pode ser cronometrada.",
+      );
+      return;
+    }
+
+    const tempTimer = {
+      deadlineId: deadline.id,
+      empresa: deadline.empresa || "Sem Empresa",
+      peca: deadline.peca || "Atividade Manual",
+      activityType: "Elaboração de Peça",
+      isPlaying: false,
+      lastStartedAt: null,
+      elapsedSeconds: durationSeconds,
+      reviewState: deadline.reviewState || ReviewState.NONE,
+      assignedTo: deadline.assignedTo || "",
+      userId: deadline.userId || "",
+    };
+
+    setTimerToStop(tempTimer);
+    setStopTimerError("");
+
+    setStopTimerForm({
+      description: "",
+      durationSeconds: durationSeconds,
+      status: TimeLogStatus.APPROVED,
+      activityType: tempTimer.activityType,
+      manualProcessTitle: tempTimer.empresa,
+      manualPiece: tempTimer.peca,
+    });
+
+    setIsStopTimerModalOpen(true);
+  };
+
+  const handleDirectReviewAction = async (
+    deadline: Deadline,
+    reviewAction: "RETURN" | "COMPLETE" | "FORWARD",
+  ) => {
     if (!userProfile) return;
 
-    let observation = detailsReviewObservation.trim() || (reviewAction === 'RETURN' ? "Devolvido" : "Ação de revisão direta");
-    if (reviewAction === 'RETURN') {
-       if (!detailsReviewObservation.trim()) {
-          setDetailsReviewError("A devolução exige o preenchimento de uma justificativa no campo de observações.");
-          alert("A devolução exige o preenchimento de uma justificativa no campo de observações.");
-          return;
-       }
-       observation = detailsReviewObservation.trim();
+    let observation =
+      detailsReviewObservation.trim() ||
+      (reviewAction === "RETURN" ? "Devolvido" : "Ação de revisão direta");
+    if (reviewAction === "RETURN") {
+      if (!detailsReviewObservation.trim()) {
+        setDetailsReviewError(
+          "A devolução exige o preenchimento de uma justificativa no campo de observações.",
+        );
+        alert(
+          "A devolução exige o preenchimento de uma justificativa no campo de observações.",
+        );
+        return;
+      }
+      observation = detailsReviewObservation.trim();
     }
 
     try {
-        let newState: ReviewState | undefined;
-        let actionLabel: ReviewLogEntry['action'] = 'TIMER_SESSION';
-        
-        // Reviewer actions
-        if (userProfile.role === UserRole.COORDINATOR) {
-            if (reviewAction === 'RETURN') {
-                newState = ReviewState.RETURNED_TO_LAWYER;
-                actionLabel = 'RETURNED';
-            } else if (reviewAction === 'COMPLETE') {
-                newState = ReviewState.COMPLETED;
-                actionLabel = 'COMPLETED';
-            } else if (reviewAction === 'FORWARD') {
-                newState = ReviewState.WAITING_ADMIN;
-                actionLabel = 'SENT_TO_ADMIN';
-            }
-        }
-        else if (userProfile.role === UserRole.ADMIN) {
-            if (reviewAction === 'RETURN') {
-                newState = ReviewState.RETURNED_TO_LAWYER;
-                actionLabel = 'RETURNED';
-            } else if (reviewAction === 'COMPLETE') {
-                const responsibleUserId = deadline.assignedTo || deadline.userId || userProfile.id;
-                const responsibleProfile = teamProfiles.find(t => t.id === responsibleUserId) || userProfile;
-                
-                if (responsibleProfile.role === UserRole.ADMIN) {
-                    newState = ReviewState.COMPLETED;
-                    actionLabel = 'COMPLETED';
-                } else {
-                    newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
-                    actionLabel = 'ADMIN_APPROVED';
-                }
-            }
-        }
+      let newState: ReviewState | undefined;
+      let actionLabel: ReviewLogEntry["action"] = "TIMER_SESSION";
 
-        if (newState) {
-            const newLogEntry: ReviewLogEntry = {
-                id: Date.now().toString(),
-                userId: userProfile.id,
-                userName: userProfile.name,
-                userRole: userProfile.role,
-                action: actionLabel,
-                fromState: deadline.reviewState || ReviewState.NONE,
-                toState: newState,
-                observation: observation,
-                timestamp: new Date().toISOString(),
-                durationSeconds: 0,
-            };
-
-            const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
-
-            await updateDoc(doc(db, "deadlines", deadline.id), {
-                reviewState: newState,
-                reviewLogs: updatedLogs,
-                ...(newState === ReviewState.COMPLETED ? { status: DeadlineStatus.COMPLETED } : {})
-            });
-            
-            setIsDetailsModalOpen(false);
-            setSelectedAppointment(null);
+      // Reviewer actions
+      if (userProfile.role === UserRole.COORDINATOR) {
+        if (reviewAction === "RETURN") {
+          newState = ReviewState.RETURNED_TO_LAWYER;
+          actionLabel = "RETURNED";
+        } else if (reviewAction === "COMPLETE") {
+          newState = ReviewState.COMPLETED;
+          actionLabel = "COMPLETED";
+        } else if (reviewAction === "FORWARD") {
+          newState = ReviewState.WAITING_ADMIN;
+          actionLabel = "SENT_TO_ADMIN";
         }
+      } else if (userProfile.role === UserRole.ADMIN) {
+        if (reviewAction === "RETURN") {
+          newState = ReviewState.RETURNED_TO_LAWYER;
+          actionLabel = "RETURNED";
+        } else if (reviewAction === "COMPLETE") {
+          const responsibleUserId =
+            deadline.assignedTo || deadline.userId || userProfile.id;
+          const responsibleProfile =
+            teamProfiles.find((t) => t.id === responsibleUserId) || userProfile;
+
+          if (responsibleProfile.role === UserRole.ADMIN) {
+            newState = ReviewState.COMPLETED;
+            actionLabel = "COMPLETED";
+          } else {
+            newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+            actionLabel = "ADMIN_APPROVED";
+          }
+        }
+      }
+
+      if (newState) {
+        const newLogEntry: ReviewLogEntry = {
+          id: Date.now().toString(),
+          userId: userProfile.id,
+          userName: userProfile.name,
+          userRole: userProfile.role,
+          action: actionLabel,
+          fromState: deadline.reviewState || ReviewState.NONE,
+          toState: newState,
+          observation: observation,
+          timestamp: new Date().toISOString(),
+          durationSeconds: 0,
+        };
+
+        const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
+
+        await updateDoc(doc(db, "deadlines", deadline.id), {
+          reviewState: newState,
+          reviewLogs: updatedLogs,
+          ...(newState === ReviewState.COMPLETED
+            ? { status: DeadlineStatus.COMPLETED }
+            : {}),
+        });
+
+        setIsDetailsModalOpen(false);
+        setSelectedAppointment(null);
+      }
     } catch (e) {
-        console.error(e);
-        alert("Ocorreu um erro ao processar a ação.");
+      console.error(e);
+      alert("Ocorreu um erro ao processar a ação.");
     }
   };
 
-  const handleSaveTimeLog = async (reviewAction?: 'SUBMIT' | 'RETURN' | 'COMPLETE' | 'FORWARD') => {
+  const handleSaveTimeLog = async (
+    reviewAction?: "SUBMIT" | "RETURN" | "COMPLETE" | "FORWARD",
+  ) => {
     if (!userProfile) return;
 
-    const isManual = !timerToStop || timerToStop.deadlineId.startsWith("general");
-    const processTitle = isManual ? stopTimerForm.manualProcessTitle : timerToStop.empresa;
+    const isManual =
+      !timerToStop || timerToStop.deadlineId.startsWith("general");
+    const processTitle = isManual
+      ? stopTimerForm.manualProcessTitle
+      : timerToStop.empresa;
     const peca = isManual ? stopTimerForm.manualPiece : timerToStop.peca;
 
     if (!processTitle || !peca) {
       alert("Por favor, preencha o processo/cliente e descrição do trabalho.");
       return;
     }
-    
-    if (reviewAction === 'RETURN' && !stopTimerForm.description.trim()) {
-      setStopTimerError("A devolução exige o preenchimento de uma justificativa no campo de observações.");
-      alert("A devolução exige o preenchimento de uma justificativa no campo de observações.");
+
+    if (reviewAction === "RETURN" && !stopTimerForm.description.trim()) {
+      setStopTimerError(
+        "A devolução exige o preenchimento de uma justificativa no campo de observações.",
+      );
+      alert(
+        "A devolução exige o preenchimento de uma justificativa no campo de observações.",
+      );
       return;
     }
 
@@ -5174,96 +6022,106 @@ export default function App() {
       const logDocRef = await addDoc(collection(db, "timeLogs"), payload);
 
       if (!isManual && timerToStop) {
-         let newState: ReviewState | undefined;
-         let actionLabel: ReviewLogEntry['action'] = 'TIMER_SESSION';
-         
-         let deadline = deadlines.find(d => d.id === timerToStop!.deadlineId);
-         if (!deadline && timerToStop?.deadlineId) {
-            try {
-               const docSnap = await getDoc(doc(db, "deadlines", timerToStop.deadlineId));
-               if (docSnap && docSnap.exists()) {
-                  deadline = { id: docSnap.id, ...docSnap.data() } as Deadline;
-               }
-            } catch (e) {
-               console.error("Erro ao buscar prazo de backup:", e);
+        let newState: ReviewState | undefined;
+        let actionLabel: ReviewLogEntry["action"] = "TIMER_SESSION";
+
+        let deadline = deadlines.find((d) => d.id === timerToStop!.deadlineId);
+        if (!deadline && timerToStop?.deadlineId) {
+          try {
+            const docSnap = await getDoc(
+              doc(db, "deadlines", timerToStop.deadlineId),
+            );
+            if (docSnap && docSnap.exists()) {
+              deadline = { id: docSnap.id, ...docSnap.data() } as Deadline;
             }
-         }
-         
-         if (deadline && reviewAction) {
-            const isExecutor = deadline.reviewState === undefined || deadline.reviewState === ReviewState.NONE || deadline.reviewState === ReviewState.RETURNED_TO_LAWYER;
+          } catch (e) {
+            console.error("Erro ao buscar prazo de backup:", e);
+          }
+        }
 
-            const responsibleUserId = deadline.assignedTo || deadline.userId || userProfile.id;
-            const responsibleProfile = teamProfiles.find(t => t.id === responsibleUserId) || userProfile;
+        if (deadline && reviewAction) {
+          const isExecutor =
+            deadline.reviewState === undefined ||
+            deadline.reviewState === ReviewState.NONE ||
+            deadline.reviewState === ReviewState.RETURNED_TO_LAWYER;
 
-            if (isExecutor && reviewAction === 'SUBMIT') {
-               if (responsibleProfile.role === UserRole.LAWYER) {
-                  newState = ReviewState.WAITING_COORDINATOR;
-                  actionLabel = 'SUBMITTED_FOR_REVIEW';
-               } else if (responsibleProfile.role === UserRole.COORDINATOR) {
-                  newState = ReviewState.WAITING_ADMIN;
-                  actionLabel = 'SUBMITTED_FOR_REVIEW';
-               } else if (responsibleProfile.role === UserRole.ADMIN) {
+          const responsibleUserId =
+            deadline.assignedTo || deadline.userId || userProfile.id;
+          const responsibleProfile =
+            teamProfiles.find((t) => t.id === responsibleUserId) || userProfile;
+
+          if (isExecutor && reviewAction === "SUBMIT") {
+            if (responsibleProfile.role === UserRole.LAWYER) {
+              newState = ReviewState.WAITING_COORDINATOR;
+              actionLabel = "SUBMITTED_FOR_REVIEW";
+            } else if (responsibleProfile.role === UserRole.COORDINATOR) {
+              newState = ReviewState.WAITING_ADMIN;
+              actionLabel = "SUBMITTED_FOR_REVIEW";
+            } else if (responsibleProfile.role === UserRole.ADMIN) {
+              newState = ReviewState.COMPLETED;
+              actionLabel = "COMPLETED";
+            }
+          } else {
+            // Reviewer actions
+            if (userProfile.role === UserRole.COORDINATOR) {
+              if (reviewAction === "RETURN") {
+                newState = ReviewState.RETURNED_TO_LAWYER;
+                actionLabel = "RETURNED";
+              } else if (reviewAction === "COMPLETE") {
+                newState = ReviewState.COMPLETED;
+                actionLabel = "COMPLETED";
+              } else if (reviewAction === "FORWARD") {
+                newState = ReviewState.WAITING_ADMIN;
+                actionLabel = "SENT_TO_ADMIN";
+              }
+            } else if (userProfile.role === UserRole.ADMIN) {
+              if (reviewAction === "RETURN") {
+                newState = ReviewState.RETURNED_TO_LAWYER;
+                actionLabel = "RETURNED";
+              } else if (reviewAction === "COMPLETE") {
+                if (responsibleProfile.role === UserRole.ADMIN) {
                   newState = ReviewState.COMPLETED;
-                  actionLabel = 'COMPLETED';
-               }
-            } else {
-               // Reviewer actions
-               if (userProfile.role === UserRole.COORDINATOR) {
-                  if (reviewAction === 'RETURN') {
-                     newState = ReviewState.RETURNED_TO_LAWYER;
-                     actionLabel = 'RETURNED';
-                  } else if (reviewAction === 'COMPLETE') {
-                     newState = ReviewState.COMPLETED;
-                     actionLabel = 'COMPLETED';
-                  } else if (reviewAction === 'FORWARD') {
-                     newState = ReviewState.WAITING_ADMIN;
-                     actionLabel = 'SENT_TO_ADMIN';
-                  }
-               }
-               else if (userProfile.role === UserRole.ADMIN) {
-                  if (reviewAction === 'RETURN') {
-                     newState = ReviewState.RETURNED_TO_LAWYER;
-                     actionLabel = 'RETURNED';
-                  } else if (reviewAction === 'COMPLETE') {
-                     if (responsibleProfile.role === UserRole.ADMIN) {
-                        newState = ReviewState.COMPLETED;
-                        actionLabel = 'COMPLETED';
-                     } else {
-                        newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
-                        actionLabel = 'ADMIN_APPROVED';
-                     }
-                  }
-               }
+                  actionLabel = "COMPLETED";
+                } else {
+                  newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+                  actionLabel = "ADMIN_APPROVED";
+                }
+              }
             }
+          }
 
-            if (newState) {
-               const newLogEntry: ReviewLogEntry = {
-                  id: Date.now().toString(),
-                  userId: userProfile.id,
-                  userName: userProfile.name,
-                  userRole: userProfile.role,
-                  action: actionLabel,
-                  fromState: deadline.reviewState || ReviewState.NONE,
-                  toState: newState,
-                  observation: stopTimerForm.description,
-                  timestamp: new Date().toISOString(),
-                  durationSeconds: Number(stopTimerForm.durationSeconds),
-               };
+          if (newState) {
+            const newLogEntry: ReviewLogEntry = {
+              id: Date.now().toString(),
+              userId: userProfile.id,
+              userName: userProfile.name,
+              userRole: userProfile.role,
+              action: actionLabel,
+              fromState: deadline.reviewState || ReviewState.NONE,
+              toState: newState,
+              observation: stopTimerForm.description,
+              timestamp: new Date().toISOString(),
+              durationSeconds: Number(stopTimerForm.durationSeconds),
+            };
 
-               const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
+            const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
 
-               await updateDoc(doc(db, "deadlines", deadline.id), {
-                  reviewState: newState,
-                  reviewLogs: updatedLogs,
-                  ...(newState === ReviewState.COMPLETED ? { status: DeadlineStatus.COMPLETED } : {})
-               });
-            }
-         }
+            await updateDoc(doc(db, "deadlines", deadline.id), {
+              reviewState: newState,
+              reviewLogs: updatedLogs,
+              ...(newState === ReviewState.COMPLETED
+                ? { status: DeadlineStatus.COMPLETED }
+                : {}),
+            });
+          }
+        }
       }
 
       // Clean up timer if it belonged to active timers list
       if (timerToStop) {
-        setActiveTimers((curr) => curr.filter((t) => t.deadlineId !== timerToStop.deadlineId));
+        setActiveTimers((curr) =>
+          curr.filter((t) => t.deadlineId !== timerToStop.deadlineId),
+        );
       }
 
       setIsStopTimerModalOpen(false);
@@ -5277,7 +6135,14 @@ export default function App() {
 
   const handleSaveRetroactiveTimeLog = async () => {
     if (!userProfile) return;
-    const { processTitle, peca, activityType, durationMinutes, date, description } = retroactiveLogForm;
+    const {
+      processTitle,
+      peca,
+      activityType,
+      durationMinutes,
+      date,
+      description,
+    } = retroactiveLogForm;
 
     if (!processTitle || !peca || !durationMinutes) {
       alert("Preencha todos os campos obrigatórios.");
@@ -5342,7 +6207,12 @@ export default function App() {
     const updated = activeTimers.map((t) => {
       if (t.isPlaying && t.lastStartedAt) {
         const added = (Date.now() - t.lastStartedAt) / 1000;
-        return { ...t, isPlaying: false, lastStartedAt: null, elapsedSeconds: t.elapsedSeconds + added };
+        return {
+          ...t,
+          isPlaying: false,
+          lastStartedAt: null,
+          elapsedSeconds: t.elapsedSeconds + added,
+        };
       }
       return t;
     });
@@ -5398,7 +6268,10 @@ export default function App() {
     }
   };
 
-  const handleEditTimeLogDuration = async (logId: string, newMinutes: number) => {
+  const handleEditTimeLogDuration = async (
+    logId: string,
+    newMinutes: number,
+  ) => {
     if (isNaN(newMinutes) || newMinutes <= 0) {
       alert("Duração inválida.");
       return;
@@ -5477,7 +6350,7 @@ export default function App() {
       const res = await fetch("/api/datajud/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cnj })
+        body: JSON.stringify({ cnj }),
       });
       if (!res.ok) {
         throw new Error("Erro ao consultar a API do Datajud.");
@@ -5494,7 +6367,10 @@ export default function App() {
       }));
       alert(`Processo encontrado no Datajud!\nClasse: ${classe.toUpperCase()}`);
     } catch (err: any) {
-      alert(err.message || "Não foi possível resgatar as informações do Datajud. Você pode digitar o título manualmente.");
+      alert(
+        err.message ||
+          "Não foi possível resgatar as informações do Datajud. Você pode digitar o título manualmente.",
+      );
     } finally {
       setIsFetchingDatajud(false);
     }
@@ -5653,8 +6529,11 @@ export default function App() {
   };
 
   const handleSaveFinanceTransaction = async (
-    transactionData: Omit<FinanceTransaction, "id" | "createdAt" | "userId" | "officeId">,
-    id: string | null
+    transactionData: Omit<
+      FinanceTransaction,
+      "id" | "createdAt" | "userId" | "officeId"
+    >,
+    id: string | null,
   ) => {
     if (!user || !userProfile || userProfile.role !== UserRole.ADMIN) {
       alert("Acesso restrito para administradores.");
@@ -5662,13 +6541,17 @@ export default function App() {
     }
 
     try {
-      const selectedClient = clients.find(c => c.id === transactionData.clientId);
+      const selectedClient = clients.find(
+        (c) => c.id === transactionData.clientId,
+      );
       const dataToSave = {
         ...transactionData,
-        clientName: selectedClient ? selectedClient.displayName || selectedClient.name : null,
+        clientName: selectedClient
+          ? selectedClient.displayName || selectedClient.name
+          : null,
         userId: user.uid,
         officeId: userProfile.officeId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       };
 
       if (id) {
@@ -5681,7 +6564,11 @@ export default function App() {
       }
     } catch (err) {
       console.error("Erro ao salvar transação financeira:", err);
-      handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, "financeTransactions");
+      handleFirestoreError(
+        err,
+        id ? OperationType.UPDATE : OperationType.CREATE,
+        "financeTransactions",
+      );
     }
   };
 
@@ -5691,7 +6578,11 @@ export default function App() {
       return;
     }
 
-    if (!confirm("Tem certeza que deseja excluir este lançamento financeiro permanentemente?")) {
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir este lançamento financeiro permanentemente?",
+      )
+    ) {
       return;
     }
 
@@ -5706,7 +6597,7 @@ export default function App() {
 
   const handleSaveRecurringExpense = async (
     data: Omit<RecurringExpense, "id" | "createdAt" | "userId" | "officeId">,
-    id: string | null
+    id: string | null,
   ) => {
     if (!user || !userProfile || userProfile.role !== UserRole.ADMIN) {
       alert("Acesso restrito para administradores.");
@@ -5717,7 +6608,7 @@ export default function App() {
         ...data,
         userId: user.uid,
         officeId: userProfile.officeId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       };
       if (id) {
         await updateDoc(doc(db, "recurringExpenses", id), dataToSave);
@@ -5726,7 +6617,11 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Erro ao salvar despesa recorrente:", err);
-      handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, "recurringExpenses");
+      handleFirestoreError(
+        err,
+        id ? OperationType.UPDATE : OperationType.CREATE,
+        "recurringExpenses",
+      );
     }
   };
 
@@ -5735,7 +6630,11 @@ export default function App() {
       alert("Acesso restrito para administradores.");
       return;
     }
-    if (!confirm("Tem certeza que deseja desativar/excluir este agendamento recorrente?")) {
+    if (
+      !confirm(
+        "Tem certeza que deseja desativar/excluir este agendamento recorrente?",
+      )
+    ) {
       return;
     }
     try {
@@ -5762,7 +6661,8 @@ export default function App() {
     if (!activeClientForProcesses || !newProcess.number.trim()) return;
 
     const cnj = newProcess.number.toUpperCase().trim();
-    const title = newProcess.title.trim().toUpperCase() || "Classe não informada";
+    const title =
+      newProcess.title.trim().toUpperCase() || "Classe não informada";
     setIsSyncing(true);
 
     try {
@@ -5778,15 +6678,18 @@ export default function App() {
         const res = await fetch("/api/datajud/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cnj })
+          body: JSON.stringify({ cnj }),
         });
         if (res.ok) {
           const data = await res.json();
           const hit = data.hits?.hits?.[0]?._source;
           if (hit) {
-            partyNames = (getParties ? getParties(hit) : []).filter(name => 
-              name !== (hit.classe?.nome || "").toUpperCase() && 
-              !(hit.assuntos || []).some((a: any) => (a.nome || "").toUpperCase() === name)
+            partyNames = (getParties ? getParties(hit) : []).filter(
+              (name) =>
+                name !== (hit.classe?.nome || "").toUpperCase() &&
+                !(hit.assuntos || []).some(
+                  (a: any) => (a.nome || "").toUpperCase() === name,
+                ),
             );
             classe = hit.classe?.nome || title;
             status = hit.situacaoProcesso || "Ativo";
@@ -5794,23 +6697,40 @@ export default function App() {
             grau = hit.grau || "";
             movements = (hit.movimentos || hit.movimentacao || [])
               .map((m: any) => ({
-                 dataHora: m.dataHora || new Date().toISOString(),
-                 descricao: m.movimentoNacional?.nome || 
-                           m.movimentoNacional?.descricao || 
-                           m.movimentoLocal?.nome || 
-                           m.movimentoLocal?.descricao || 
-                           m.descricao || 
-                           m.nome || 
-                           m.texto || 
-                           m.tipo || 
-                           "Sem descrição",
-                 complementos: (m.complementos || m.complemento || [])?.map((c: any) => c.nome ? `${c.nome}: ${c.valor}` : (c.descricao ? `${c.descricao}: ${c.valor}` : c.valor)).filter(Boolean) || []
+                dataHora: m.dataHora || new Date().toISOString(),
+                descricao:
+                  m.movimentoNacional?.nome ||
+                  m.movimentoNacional?.descricao ||
+                  m.movimentoLocal?.nome ||
+                  m.movimentoLocal?.descricao ||
+                  m.descricao ||
+                  m.nome ||
+                  m.texto ||
+                  m.tipo ||
+                  "Sem descrição",
+                complementos:
+                  (m.complementos || m.complemento || [])
+                    ?.map((c: any) =>
+                      c.nome
+                        ? `${c.nome}: ${c.valor}`
+                        : c.descricao
+                          ? `${c.descricao}: ${c.valor}`
+                          : c.valor,
+                    )
+                    .filter(Boolean) || [],
               }))
-              .sort((a: any, b: any) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.dataHora).getTime() -
+                  new Date(a.dataHora).getTime(),
+              );
           }
         }
       } catch (searchErr) {
-        console.warn("Datajud search failed, falls back to manual registry:", searchErr);
+        console.warn(
+          "Datajud search failed, falls back to manual registry:",
+          searchErr,
+        );
       }
 
       // 2. Cria o novo documento em monitoredProcesses vinculado a este cliente
@@ -5818,7 +6738,8 @@ export default function App() {
         cnj: cnj,
         parties: partyNames.slice(0, 5),
         classe: classe,
-        clientName: activeClientForProcesses.displayName || activeClientForProcesses.name,
+        clientName:
+          activeClientForProcesses.displayName || activeClientForProcesses.name,
         clientId: activeClientForProcesses.id,
         lastUpdate: new Date().toISOString(),
         movements: movements,
@@ -5826,14 +6747,19 @@ export default function App() {
         court: court,
         grau: grau,
         officeId: userProfile?.officeId || "",
-        sector: activeClientForProcesses.sector || userProfile?.sector || Sector.GENERAL,
+        sector:
+          activeClientForProcesses.sector ||
+          userProfile?.sector ||
+          Sector.GENERAL,
         userId: userProfile?.id || "",
         createdAt: new Date().toISOString(),
-        notes: []
+        notes: [],
       };
 
       // Limpar campos undefined
-      Object.keys(newProc).forEach(k => { if(newProc[k] === undefined) delete newProc[k]; });
+      Object.keys(newProc).forEach((k) => {
+        if (newProc[k] === undefined) delete newProc[k];
+      });
 
       await addDoc(collection(db, "monitoredProcesses"), newProc);
       setNewProcess({ number: "", title: "" });
@@ -5848,14 +6774,21 @@ export default function App() {
 
   const handleDeleteProcess = async (procId: string) => {
     if (!activeClientForProcesses) return;
-    if (!window.confirm("Deseja realmente remover este processo e todas as suas notas definitivamente?")) return;
+    if (
+      !window.confirm(
+        "Deseja realmente remover este processo e todas as suas notas definitivamente?",
+      )
+    )
+      return;
     try {
       await deleteDoc(doc(db, "monitoredProcesses", procId));
       if (activeProcessForNotes === procId) setActiveProcessForNotes(null);
       alert("Processo excluído com sucesso!");
     } catch (err: any) {
       console.error("[handleDeleteProcess] Error removing doc:", err);
-      alert("Erro ao remover processo: " + (err.message || "Erro desconhecido"));
+      alert(
+        "Erro ao remover processo: " + (err.message || "Erro desconhecido"),
+      );
     }
   };
 
@@ -5868,7 +6801,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
-    const targetProc = monitoredProcesses.find(p => p.id === procId);
+    const targetProc = monitoredProcesses.find((p) => p.id === procId);
     if (!targetProc) return;
 
     const updatedNotes = [note, ...(targetProc.notes || [])];
@@ -5886,10 +6819,12 @@ export default function App() {
   const handleDeleteNote = async (procId: string, noteId: string) => {
     if (!confirm("Remover esta anotação?")) return;
 
-    const targetProc = monitoredProcesses.find(p => p.id === procId);
+    const targetProc = monitoredProcesses.find((p) => p.id === procId);
     if (!targetProc) return;
 
-    const updatedNotes = (targetProc.notes || []).filter(n => n.id !== noteId);
+    const updatedNotes = (targetProc.notes || []).filter(
+      (n) => n.id !== noteId,
+    );
 
     try {
       await updateDoc(doc(db, "monitoredProcesses", procId), {
@@ -5903,8 +6838,14 @@ export default function App() {
   const filteredDeadlines = useMemo(() => {
     return deadlines.filter((d) => {
       // Filtro de visibilidade por cargo para Coordenadores (movido do servidor para suportar dados legados)
-      if (userProfile?.role === UserRole.COORDINATOR && userProfile.sector !== Sector.GENERAL) {
-        const matchesSector = !d.sector || d.sector === userProfile.sector || d.sector === Sector.GENERAL;
+      if (
+        userProfile?.role === UserRole.COORDINATOR &&
+        userProfile.sector !== Sector.GENERAL
+      ) {
+        const matchesSector =
+          !d.sector ||
+          d.sector === userProfile.sector ||
+          d.sector === Sector.GENERAL;
         if (!matchesSector) return false;
       }
 
@@ -5923,12 +6864,16 @@ export default function App() {
 
   const activeClientProcesses = useMemo(() => {
     if (!activeClientForProcesses) return [];
-    return monitoredProcesses.filter((proc) => proc.clientId === activeClientForProcesses.id);
+    return monitoredProcesses.filter(
+      (proc) => proc.clientId === activeClientForProcesses.id,
+    );
   }, [monitoredProcesses, activeClientForProcesses]);
 
   const selectedClientProcesses = useMemo(() => {
     if (!selectedClientForDetails) return [];
-    return monitoredProcesses.filter((proc) => proc.clientId === selectedClientForDetails.id);
+    return monitoredProcesses.filter(
+      (proc) => proc.clientId === selectedClientForDetails.id,
+    );
   }, [monitoredProcesses, selectedClientForDetails]);
 
   const chartData = useMemo(() => {
@@ -6098,37 +7043,53 @@ export default function App() {
       const matchSearch =
         !deadlinesSearch ||
         d.peca.toLowerCase().includes(deadlinesSearch.toLowerCase()) ||
-        (d.assunto && d.assunto.toLowerCase().includes(deadlinesSearch.toLowerCase())) ||
+        (d.assunto &&
+          d.assunto.toLowerCase().includes(deadlinesSearch.toLowerCase())) ||
         d.responsavel.toLowerCase().includes(deadlinesSearch.toLowerCase()) ||
         d.empresa.toLowerCase().includes(deadlinesSearch.toLowerCase());
       const matchResp =
-        deadlinesResponsavelFilter === "Todos" || d.responsavel === deadlinesResponsavelFilter;
+        deadlinesResponsavelFilter === "Todos" ||
+        d.responsavel === deadlinesResponsavelFilter;
       const matchEmp =
-        deadlinesEmpresaFilter === "Todas" || d.empresa === deadlinesEmpresaFilter;
+        deadlinesEmpresaFilter === "Todas" ||
+        d.empresa === deadlinesEmpresaFilter;
       return matchSearch && matchResp && matchEmp;
     });
-  }, [pendingDeadlines, deadlinesSearch, deadlinesResponsavelFilter, deadlinesEmpresaFilter]);
+  }, [
+    pendingDeadlines,
+    deadlinesSearch,
+    deadlinesResponsavelFilter,
+    deadlinesEmpresaFilter,
+  ]);
 
   const filteredCompletedDeadlines = useMemo(() => {
     return completedDeadlines.filter((d) => {
       const matchSearch =
         !deadlinesSearch ||
         d.peca.toLowerCase().includes(deadlinesSearch.toLowerCase()) ||
-        (d.assunto && d.assunto.toLowerCase().includes(deadlinesSearch.toLowerCase())) ||
+        (d.assunto &&
+          d.assunto.toLowerCase().includes(deadlinesSearch.toLowerCase())) ||
         d.responsavel.toLowerCase().includes(deadlinesSearch.toLowerCase()) ||
         d.empresa.toLowerCase().includes(deadlinesSearch.toLowerCase());
       const matchResp =
-        deadlinesResponsavelFilter === "Todos" || d.responsavel === deadlinesResponsavelFilter;
+        deadlinesResponsavelFilter === "Todos" ||
+        d.responsavel === deadlinesResponsavelFilter;
       const matchEmp =
-        deadlinesEmpresaFilter === "Todas" || d.empresa === deadlinesEmpresaFilter;
+        deadlinesEmpresaFilter === "Todas" ||
+        d.empresa === deadlinesEmpresaFilter;
       return matchSearch && matchResp && matchEmp;
     });
-  }, [completedDeadlines, deadlinesSearch, deadlinesResponsavelFilter, deadlinesEmpresaFilter]);
+  }, [
+    completedDeadlines,
+    deadlinesSearch,
+    deadlinesResponsavelFilter,
+    deadlinesEmpresaFilter,
+  ]);
 
   const filteredDeadlinesForLink = useMemo(() => {
     if (!deadlines) return [];
     const search = deadlineSearchTerm.trim().toLowerCase();
-    
+
     // Sort deadlines: PENDING first, then by date descending
     const sorted = [...deadlines].sort((a, b) => {
       if (a.status !== b.status) {
@@ -6243,16 +7204,27 @@ export default function App() {
           return value.toDate().toISOString();
         }
         if (value._seconds !== undefined && value._nanoseconds !== undefined) {
-          return new Date((value._seconds * 1000) + (value._nanoseconds / 1000000)).toISOString();
+          return new Date(
+            value._seconds * 1000 + value._nanoseconds / 1000000,
+          ).toISOString();
         }
         if (value.seconds !== undefined && value.nanoseconds !== undefined) {
           try {
-            return new Date((value.seconds * 1000) + (value.nanoseconds / 1000000)).toISOString();
+            return new Date(
+              value.seconds * 1000 + value.nanoseconds / 1000000,
+            ).toISOString();
           } catch (e) {}
         }
-        
+
         // Exclude internal Firestore services or custom non-serializable fields/properties
-        if (key === "icon" || key === "_service" || key === "firestore" || key === "db" || key === "app" || key === "onSnapshot") {
+        if (
+          key === "icon" ||
+          key === "_service" ||
+          key === "firestore" ||
+          key === "db" ||
+          key === "app" ||
+          key === "onSnapshot"
+        ) {
           return undefined;
         }
       }
@@ -6360,30 +7332,33 @@ export default function App() {
 
   const isSubscriptionInactive = useMemo(() => {
     if (!user) return false;
-    
+
     // O Super Admin (rudyendo@gmail.com) só ignora o bloqueio na tela de superadmin ou no seu escritório pessoal
-    if (user.email === "rudyendo@gmail.com" && (view === "superadmin" || userProfile?.officeId === user.uid)) {
+    if (
+      user.email === "rudyendo@gmail.com" &&
+      (view === "superadmin" || userProfile?.officeId === user.uid)
+    ) {
       return false;
     }
 
     if (!currentSubscription) return false; // Libera provisório enquanto carrega
-    
+
     const status = currentSubscription.status;
     const validUntil = currentSubscription.validUntil;
-    
+
     if (status === "GRATIS") return false;
     if (status === "BLOCKED") return true;
     if (status === "PENDING_PAYMENT") return true;
     if (status === "PENDING_CHOICE") return true;
-    
+
     if (validUntil) {
       const expiry = new Date(validUntil);
       const today = new Date();
-      today.setHours(0,0,0,0);
-      expiry.setHours(0,0,0,0);
+      today.setHours(0, 0, 0, 0);
+      expiry.setHours(0, 0, 0, 0);
       return expiry < today;
     }
-    
+
     return false;
   }, [currentSubscription, user, userProfile?.officeId, view]);
 
@@ -6395,10 +7370,7 @@ export default function App() {
     );
   if (!user)
     return (
-      <AuthScreen
-        onGoogleLogin={handleGoogleLogin}
-        loading={authLoading}
-      />
+      <AuthScreen onGoogleLogin={handleGoogleLogin} loading={authLoading} />
     );
 
   if (isSubscriptionInactive)
@@ -6526,9 +7498,9 @@ export default function App() {
       <div className="md:hidden bg-[#020617] text-white p-5 flex justify-between items-center sticky top-0 z-[40] shadow-xl">
         <div className="flex items-center gap-3">
           {dynamicSettings.officeLogo ? (
-            <img 
-              src={dynamicSettings.officeLogo} 
-              alt={dynamicSettings.officeName || "Logo"} 
+            <img
+              src={dynamicSettings.officeLogo}
+              alt={dynamicSettings.officeName || "Logo"}
               className="h-16 w-auto max-w-[180px] object-contain"
               referrerPolicy="no-referrer"
             />
@@ -6611,25 +7583,27 @@ service cloud.firestore {
                       : view === "correspondence"
                         ? "Ofícios e Memorandos"
                         : view === "documents"
-                            ? "Gerador de Documentos"
-                            : view === "reports"
-                      ? "Relatórios"
-                      : view === "team"
-                        ? "Gestão de Equipe"
-                        : view === "monitoring"
-                          ? "Acompanhamento Processual"
-                          : view === "finance"
-                            ? "Controle Financeiro"
-                            : view === "superadmin"
-                              ? "Controle Financeiro Geral (Sistema)"
-                              : "Configurações"}
+                          ? "Gerador de Documentos"
+                          : view === "reports"
+                            ? "Relatórios"
+                            : view === "team"
+                              ? "Gestão de Equipe"
+                              : view === "monitoring"
+                                ? "Acompanhamento Processual"
+                                : view === "finance"
+                                  ? "Controle Financeiro"
+                                  : view === "superadmin"
+                                    ? "Controle Financeiro Geral (Sistema)"
+                                    : "Configurações"}
             </h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse" />
               <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">
                 {view === "superadmin"
                   ? "SISTEMA & ADMINISTRAÇÃO"
-                  : (userProfile ? `${userProfile.role} | ${userProfile.sector}` : "SISTEMA OPERACIONAL")}
+                  : userProfile
+                    ? `${userProfile.role} | ${userProfile.sector}`
+                    : "SISTEMA OPERACIONAL"}
               </span>
             </div>
           </div>
@@ -6704,7 +7678,7 @@ service cloud.firestore {
                 }}
                 className="w-full md:w-auto bg-blue-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm shadow-xl shadow-blue-600/30 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
               >
-                <Icons.Plus /> MONITORAR NOVO PRAZO
+                <Icons.Plus /> MONITORAR NOVO PROCESSO
               </button>
             ) : view === "deadlines" ? (
               <button
@@ -6795,8 +7769,18 @@ service cloud.firestore {
                   const dayStr = formatDateToISO(day);
                   const filteredDeadlines = deadlines.filter((d) => {
                     if (userProfile?.role === UserRole.ADMIN) return true;
-                    if (userProfile?.role === UserRole.COORDINATOR && (!d.sector || d.sector === userProfile.sector || d.sector === Sector.GENERAL)) return true;
-                    if (userProfile?.role === UserRole.LAWYER && (d.userId === user?.uid || d.assignedTo === user?.uid)) return true;
+                    if (
+                      userProfile?.role === UserRole.COORDINATOR &&
+                      (!d.sector ||
+                        d.sector === userProfile.sector ||
+                        d.sector === Sector.GENERAL)
+                    )
+                      return true;
+                    if (
+                      userProfile?.role === UserRole.LAWYER &&
+                      (d.userId === user?.uid || d.assignedTo === user?.uid)
+                    )
+                      return true;
                     if (userProfile?.role === UserRole.INTERN) return true;
                     return false;
                   });
@@ -6809,8 +7793,18 @@ service cloud.firestore {
 
                   const filteredAdminTasks = adminTasks.filter((t) => {
                     if (userProfile?.role === UserRole.ADMIN) return true;
-                    if (userProfile?.role === UserRole.COORDINATOR && (!t.sector || t.sector === userProfile.sector || t.sector === Sector.GENERAL)) return true;
-                    if (userProfile?.role === UserRole.LAWYER && (t.userId === user?.uid || t.assignedTo === user?.uid)) return true;
+                    if (
+                      userProfile?.role === UserRole.COORDINATOR &&
+                      (!t.sector ||
+                        t.sector === userProfile.sector ||
+                        t.sector === Sector.GENERAL)
+                    )
+                      return true;
+                    if (
+                      userProfile?.role === UserRole.LAWYER &&
+                      (t.userId === user?.uid || t.assignedTo === user?.uid)
+                    )
+                      return true;
                     if (userProfile?.role === UserRole.INTERN) return true;
                     return false;
                   });
@@ -6846,30 +7840,64 @@ service cloud.firestore {
                           </div>
                         )}
                         {dayDeadlines.map((d) => {
-                          const isCompleted = d.status === DeadlineStatus.COMPLETED;
-                          const isMyDeadline = d.assignedTo === userProfile?.id || (d.responsavel && userProfile?.name && d.responsavel.toLowerCase().trim() === userProfile.name.toLowerCase().trim());
-                          
+                          const isCompleted =
+                            d.status === DeadlineStatus.COMPLETED;
+                          const isMyDeadline =
+                            d.assignedTo === userProfile?.id ||
+                            (d.responsavel &&
+                              userProfile?.name &&
+                              d.responsavel.toLowerCase().trim() ===
+                                userProfile.name.toLowerCase().trim());
+
                           let cardClasses = "bg-red-50 border-red-100 border";
-                          
+
                           if (isCompleted) {
-                             cardClasses = "bg-emerald-50 border-emerald-100 border";
-                          } else if (d.reviewState === ReviewState.WAITING_COORDINATOR || d.reviewState === ReviewState.REVIEWING_COORDINATOR || d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR) {
-                             cardClasses = "bg-yellow-100 border-yellow-400 border-2";
-                             if (d.reviewState !== ReviewState.REVIEWING_COORDINATOR && userProfile?.role === UserRole.COORDINATOR) {
-                                cardClasses += " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
-                             }
-                          } else if (d.reviewState === ReviewState.WAITING_ADMIN || d.reviewState === ReviewState.REVIEWING_ADMIN) {
-                             cardClasses = "bg-orange-100 border-orange-500 border-2";
-                             if (d.reviewState === ReviewState.WAITING_ADMIN && userProfile?.role === UserRole.ADMIN) {
-                                cardClasses += " animate-pulse ring-2 ring-orange-500 ring-offset-2";
-                             }
-                          } else if (d.reviewState === ReviewState.RETURNED_TO_LAWYER) {
-                             cardClasses = "bg-red-100 border-red-400 border-2";
-                             if (userProfile?.role === UserRole.LAWYER && isMyDeadline) {
-                                cardClasses += " animate-pulse ring-2 ring-red-400 ring-offset-2";
-                             }
+                            cardClasses =
+                              "bg-emerald-50 border-emerald-100 border";
+                          } else if (
+                            d.reviewState === ReviewState.WAITING_COORDINATOR ||
+                            d.reviewState ===
+                              ReviewState.REVIEWING_COORDINATOR ||
+                            d.reviewState ===
+                              ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
+                          ) {
+                            cardClasses =
+                              "bg-yellow-100 border-yellow-400 border-2";
+                            if (
+                              d.reviewState !==
+                                ReviewState.REVIEWING_COORDINATOR &&
+                              userProfile?.role === UserRole.COORDINATOR
+                            ) {
+                              cardClasses +=
+                                " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
+                            }
+                          } else if (
+                            d.reviewState === ReviewState.WAITING_ADMIN ||
+                            d.reviewState === ReviewState.REVIEWING_ADMIN
+                          ) {
+                            cardClasses =
+                              "bg-orange-100 border-orange-500 border-2";
+                            if (
+                              d.reviewState === ReviewState.WAITING_ADMIN &&
+                              userProfile?.role === UserRole.ADMIN
+                            ) {
+                              cardClasses +=
+                                " animate-pulse ring-2 ring-orange-500 ring-offset-2";
+                            }
+                          } else if (
+                            d.reviewState === ReviewState.RETURNED_TO_LAWYER
+                          ) {
+                            cardClasses = "bg-red-100 border-red-400 border-2";
+                            if (
+                              userProfile?.role === UserRole.LAWYER &&
+                              isMyDeadline
+                            ) {
+                              cardClasses +=
+                                " animate-pulse ring-2 ring-red-400 ring-offset-2";
+                            }
                           } else if (isMyDeadline) {
-                             cardClasses = "bg-red-50/95 border-red-500 border-2 shadow-md font-semibold";
+                            cardClasses =
+                              "bg-red-50/95 border-red-500 border-2 shadow-md font-semibold";
                           }
 
                           return (
@@ -6914,25 +7942,44 @@ service cloud.firestore {
                                 <span className="text-[11px] font-bold text-slate-900 leading-tight uppercase line-clamp-2">
                                   {d.peca}
                                 </span>
-                                <span className={`text-[7.5px] font-black uppercase tracking-widest mt-1 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded ${
-                                  isCompleted
-                                    ? "text-emerald-700 bg-emerald-100/60 border border-emerald-200/40"
-                                    : isMyDeadline 
-                                      ? "text-red-700 bg-red-100/60 border border-red-200/40" 
-                                      : "text-slate-500 bg-slate-50 border border-slate-100"
-                                }`}>
-                                  <Icons.Users className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isMyDeadline ? "text-red-600" : "text-blue-500"}`} /> 
-                                  {isMyDeadline ? `★ RESP: ${getFirstName(d.responsavel)}` : `RESP: ${getFirstName(d.responsavel)}`}
-                                </span>
-                                {d.assignedTo && teamProfiles.find(t => t.id === d.assignedTo)?.name !== d.responsavel && (
-                                  <span className={`text-[7.5px] font-black uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded border ${
+                                <span
+                                  className={`text-[7.5px] font-black uppercase tracking-widest mt-1 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded ${
                                     isCompleted
-                                      ? "text-emerald-600 bg-emerald-100/30 border-emerald-250/30"
-                                      : "text-slate-400 bg-slate-50 border-slate-100"
-                                  }`}>
-                                    <Icons.Users className={`w-1.5 h-1.5 inline ${isCompleted ? "text-emerald-500" : "text-slate-400"}`} /> ATRIBUÍDO: {getFirstName(teamProfiles.find(t => t.id === d.assignedTo)?.name)}
-                                  </span>
-                                )}
+                                      ? "text-emerald-700 bg-emerald-100/60 border border-emerald-200/40"
+                                      : isMyDeadline
+                                        ? "text-red-700 bg-red-100/60 border border-red-200/40"
+                                        : "text-slate-500 bg-slate-50 border border-slate-100"
+                                  }`}
+                                >
+                                  <Icons.Users
+                                    className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isMyDeadline ? "text-red-600" : "text-blue-500"}`}
+                                  />
+                                  {isMyDeadline
+                                    ? `★ RESP: ${getFirstName(d.responsavel)}`
+                                    : `RESP: ${getFirstName(d.responsavel)}`}
+                                </span>
+                                {d.assignedTo &&
+                                  teamProfiles.find(
+                                    (t) => t.id === d.assignedTo,
+                                  )?.name !== d.responsavel && (
+                                    <span
+                                      className={`text-[7.5px] font-black uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded border ${
+                                        isCompleted
+                                          ? "text-emerald-600 bg-emerald-100/30 border-emerald-250/30"
+                                          : "text-slate-400 bg-slate-50 border-slate-100"
+                                      }`}
+                                    >
+                                      <Icons.Users
+                                        className={`w-1.5 h-1.5 inline ${isCompleted ? "text-emerald-500" : "text-slate-400"}`}
+                                      />{" "}
+                                      ATRIBUÍDO:{" "}
+                                      {getFirstName(
+                                        teamProfiles.find(
+                                          (t) => t.id === d.assignedTo,
+                                        )?.name,
+                                      )}
+                                    </span>
+                                  )}
                               </div>
                               <p
                                 className={`text-[8px] font-black truncate ${isCompleted ? "text-emerald-400" : "text-slate-400"}`}
@@ -6945,11 +7992,20 @@ service cloud.firestore {
                         {dayAdm.map((t) => {
                           const isCompleted =
                             t.status === DeadlineStatus.COMPLETED;
-                          const isMyTask = t.assignedTo === userProfile?.id || (!t.assignedTo && t.userId === userProfile?.id);
-                          const taskRespName = teamProfiles.find(member => member.id === t.assignedTo)?.name 
-                            || teamProfiles.find(member => member.id === t.userId)?.name 
-                            || (t.userId === user?.uid ? userProfile?.name : null)
-                            || "Membro";
+                          const isMyTask =
+                            t.assignedTo === userProfile?.id ||
+                            (!t.assignedTo && t.userId === userProfile?.id);
+                          const taskRespName =
+                            teamProfiles.find(
+                              (member) => member.id === t.assignedTo,
+                            )?.name ||
+                            teamProfiles.find(
+                              (member) => member.id === t.userId,
+                            )?.name ||
+                            (t.userId === user?.uid
+                              ? userProfile?.name
+                              : null) ||
+                            "Membro";
                           return (
                             <div
                               key={t.id}
@@ -6961,10 +8017,10 @@ service cloud.firestore {
                                 setIsDetailsModalOpen(true);
                               }}
                               className={`p-3 border rounded-2xl flex flex-col gap-1 cursor-pointer hover:shadow-md transition-all group relative ${
-                                isCompleted 
-                                  ? "bg-emerald-50 border-emerald-100" 
-                                  : isMyTask 
-                                    ? "bg-blue-50/95 border-blue-500 border-2 shadow-md font-semibold" 
+                                isCompleted
+                                  ? "bg-emerald-50 border-emerald-100"
+                                  : isMyTask
+                                    ? "bg-blue-50/95 border-blue-500 border-2 shadow-md font-semibold"
                                     : "bg-blue-50 border-blue-100"
                               }`}
                             >
@@ -6999,15 +8055,21 @@ service cloud.firestore {
                               >
                                 {t.title}
                               </p>
-                              <span className={`text-[7.5px] font-black uppercase tracking-widest mt-1 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded ${
-                                isCompleted
-                                  ? "text-emerald-700 bg-emerald-100/60 border border-emerald-250/30"
-                                  : isMyTask 
-                                    ? "text-blue-700 bg-blue-100/50 border border-blue-200/40" 
-                                    : "text-slate-500 bg-slate-50 border border-slate-100"
-                              }`}>
-                                <Icons.Users className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isMyTask ? "text-blue-600" : "text-blue-500"}`} /> 
-                                {isMyTask ? `★ RESP: ${getFirstName(taskRespName)}` : `RESP: ${getFirstName(taskRespName)}`}
+                              <span
+                                className={`text-[7.5px] font-black uppercase tracking-widest mt-1 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded ${
+                                  isCompleted
+                                    ? "text-emerald-700 bg-emerald-100/60 border border-emerald-250/30"
+                                    : isMyTask
+                                      ? "text-blue-700 bg-blue-100/50 border border-blue-200/40"
+                                      : "text-slate-500 bg-slate-50 border border-slate-100"
+                                }`}
+                              >
+                                <Icons.Users
+                                  className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isMyTask ? "text-blue-600" : "text-blue-500"}`}
+                                />
+                                {isMyTask
+                                  ? `★ RESP: ${getFirstName(taskRespName)}`
+                                  : `RESP: ${getFirstName(taskRespName)}`}
                               </span>
                               <p
                                 className={`text-[8px] font-black ${isCompleted ? "text-emerald-400" : "text-slate-400"}`}
@@ -7031,7 +8093,8 @@ service cloud.firestore {
                     Métricas de Produtividade
                   </h3>
                   <p className="text-slate-400 font-medium text-xs md:text-sm leading-relaxed opacity-70">
-                    Produtividade mensal consolidada (Prazos e Tarefas concluídas).
+                    Produtividade mensal consolidada (Prazos e Tarefas
+                    concluídas).
                   </p>
                 </div>
 
@@ -7039,7 +8102,8 @@ service cloud.firestore {
                   <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/10 backdrop-blur-sm">
                     <div className="flex justify-between items-center mb-6">
                       <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                        <Icons.ChartIcon className="w-4 h-4" /> Produtividade Anual
+                        <Icons.ChartIcon className="w-4 h-4" /> Produtividade
+                        Anual
                       </h4>
                       <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">
                         {currentMonthName}
@@ -7133,7 +8197,7 @@ service cloud.firestore {
                       </ResponsiveContainer>
                     </div>
                   </div>
- 
+
                   <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/10 backdrop-blur-sm">
                     <div className="flex justify-between items-center mb-6">
                       <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
@@ -7199,7 +8263,8 @@ service cloud.firestore {
                     Gestão de Clientes & CRM
                   </h2>
                   <p className="text-[9.5px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                    Pastas, Contatos e Processos Integrados ({filteredClientsList.length} total)
+                    Pastas, Contatos e Processos Integrados (
+                    {filteredClientsList.length} total)
                   </p>
                 </div>
               </div>
@@ -7224,21 +8289,27 @@ service cloud.firestore {
                 <div className="bg-slate-50 p-1 rounded-xl border border-slate-100 flex items-center gap-1 shadow-inner">
                   {(["ALL", "PJ", "PF"] as const).map((filterOpt) => {
                     const label = filterOpt === "ALL" ? "TODOS" : filterOpt;
-                    const count = filterOpt === "ALL" 
-                      ? filteredClientsList.length 
-                      : filteredClientsList.filter(c => c.type === filterOpt).length;
+                    const count =
+                      filterOpt === "ALL"
+                        ? filteredClientsList.length
+                        : filteredClientsList.filter(
+                            (c) => c.type === filterOpt,
+                          ).length;
                     const isActive = clientTypeFilter === filterOpt;
                     return (
                       <button
                         key={filterOpt}
                         onClick={() => setClientTypeFilter(filterOpt)}
                         className={`px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-wider transition-all ${
-                          isActive 
-                            ? "bg-white text-slate-800 shadow-sm border border-slate-200" 
+                          isActive
+                            ? "bg-white text-slate-800 shadow-sm border border-slate-200"
                             : "text-slate-400 hover:text-slate-600"
                         }`}
                       >
-                        {label} <span className="ml-0.5 opacity-60 text-[8px] font-bold">({count})</span>
+                        {label}{" "}
+                        <span className="ml-0.5 opacity-60 text-[8px] font-bold">
+                          ({count})
+                        </span>
                       </button>
                     );
                   })}
@@ -7247,7 +8318,9 @@ service cloud.firestore {
             </div>
 
             {/* GRID DE CLIENTES - 4 COLUNAS EM EXPANSAO DESKTOP */}
-            {filteredClientsList.filter(c => clientTypeFilter === "ALL" || c.type === clientTypeFilter).length === 0 ? (
+            {filteredClientsList.filter(
+              (c) => clientTypeFilter === "ALL" || c.type === clientTypeFilter,
+            ).length === 0 ? (
               <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-slate-200">
                 <Icons.Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-slate-400 font-black text-xs uppercase tracking-widest">
@@ -7257,13 +8330,19 @@ service cloud.firestore {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredClientsList
-                  .filter(c => clientTypeFilter === "ALL" || c.type === clientTypeFilter)
+                  .filter(
+                    (c) =>
+                      clientTypeFilter === "ALL" || c.type === clientTypeFilter,
+                  )
                   .map((client) => {
                     const isLegacy = client.id.startsWith("legacy-");
-                    const processesCount = monitoredProcesses.filter(p => p.clientId === client.id).length;
-                    const avatarColor = client.type === "PJ" 
-                      ? "bg-indigo-50 text-indigo-700 border-indigo-100" 
-                      : "bg-emerald-50 text-emerald-700 border-emerald-100";
+                    const processesCount = monitoredProcesses.filter(
+                      (p) => p.clientId === client.id,
+                    ).length;
+                    const avatarColor =
+                      client.type === "PJ"
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-100";
 
                     return (
                       <div
@@ -7279,12 +8358,18 @@ service cloud.firestore {
                           <div className="flex justify-between items-start gap-2 mb-3">
                             <div className="flex items-center gap-2">
                               {/* AVATAR COM INICIAIS */}
-                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-[10px] select-none ${avatarColor}`}>
+                              <div
+                                className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-[10px] select-none ${avatarColor}`}
+                              >
                                 {getClientInitials(client.displayName)}
                               </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[6px] font-black uppercase tracking-wider ${
-                                client.type === "PJ" ? "bg-indigo-100/60 text-indigo-700" : "bg-emerald-100/60 text-emerald-700"
-                              }`}>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[6px] font-black uppercase tracking-wider ${
+                                  client.type === "PJ"
+                                    ? "bg-indigo-100/60 text-indigo-700"
+                                    : "bg-emerald-100/60 text-emerald-700"
+                                }`}
+                              >
                                 {client.type}
                               </span>
                             </div>
@@ -7338,7 +8423,9 @@ service cloud.firestore {
                             {processesCount > 0 && (
                               <p className="text-[8.5px] font-black text-indigo-600 flex items-center gap-1 uppercase tracking-wider">
                                 <Icons.Table className="w-2.5 h-2.5 text-indigo-500" />
-                                {processesCount === 1 ? "1 Processo" : `${processesCount} Processos`}
+                                {processesCount === 1
+                                  ? "1 Processo"
+                                  : `${processesCount} Processos`}
                               </p>
                             )}
                           </div>
@@ -7405,10 +8492,14 @@ service cloud.firestore {
 
                 {/* Filtro do Advogado */}
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Advogado:</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">
+                    Advogado:
+                  </span>
                   <select
                     value={deadlinesResponsavelFilter}
-                    onChange={(e) => setDeadlinesResponsavelFilter(e.target.value)}
+                    onChange={(e) =>
+                      setDeadlinesResponsavelFilter(e.target.value)
+                    }
                     className="w-full sm:w-auto py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {uniqResponsaveis.map((item) => (
@@ -7421,7 +8512,9 @@ service cloud.firestore {
 
                 {/* Filtro da Empresa */}
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Cliente:</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">
+                    Cliente:
+                  </span>
                   <select
                     value={deadlinesEmpresaFilter}
                     onChange={(e) => setDeadlinesEmpresaFilter(e.target.value)}
@@ -7461,23 +8554,32 @@ service cloud.firestore {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-slate-100 bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            <th className="py-3.5 px-4 text-center w-12">Status</th>
-                            <th className="py-3.5 px-4">Peça Processual / Assunto</th>
+                            <th className="py-3.5 px-4 text-center w-12">
+                              Status
+                            </th>
+                            <th className="py-3.5 px-4">
+                              Peça Processual / Assunto
+                            </th>
                             <th className="py-3.5 px-4">Cliente / Empresa</th>
                             <th className="py-3.5 px-4">Responsável</th>
                             <th className="py-3.5 px-4">Vencimento</th>
-                            <th className="py-3.5 px-4 text-center w-36">Ações</th>
+                            <th className="py-3.5 px-4 text-center w-36">
+                              Ações
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
                           {combinedDeadlinesForTable.map((d) => {
-                            const isCompleted = d.status === DeadlineStatus.COMPLETED;
+                            const isCompleted =
+                              d.status === DeadlineStatus.COMPLETED;
                             const daysDiff = getDaysDiff(d.data);
                             return (
                               <tr
                                 key={d.id}
                                 className={`group hover:bg-slate-50/50 transition-colors ${
-                                  isCompleted ? "bg-slate-50/30 text-slate-500" : ""
+                                  isCompleted
+                                    ? "bg-slate-50/30 text-slate-500"
+                                    : ""
                                 }`}
                               >
                                 {/* Alternar Status */}
@@ -7489,7 +8591,11 @@ service cloud.firestore {
                                         ? "bg-emerald-100 border-emerald-300 text-emerald-700"
                                         : "bg-white border-slate-200 hover:border-blue-500 text-slate-400"
                                     }`}
-                                    title={isCompleted ? "Reabrir Prazo" : "Concluir Prazo"}
+                                    title={
+                                      isCompleted
+                                        ? "Reabrir Prazo"
+                                        : "Concluir Prazo"
+                                    }
                                   >
                                     {isCompleted ? (
                                       <Icons.Check className="w-3.5 h-3.5" />
@@ -7510,7 +8616,10 @@ service cloud.firestore {
                                     </span>
                                   </div>
                                   {d.assunto && (
-                                    <p className="text-[11px] text-slate-500 leading-wider font-medium line-clamp-1 italic mt-0.5" title={d.assunto}>
+                                    <p
+                                      className="text-[11px] text-slate-500 leading-wider font-medium line-clamp-1 italic mt-0.5"
+                                      title={d.assunto}
+                                    >
                                       "{d.assunto}"
                                     </p>
                                   )}
@@ -7548,7 +8657,9 @@ service cloud.firestore {
                                             : "text-slate-400"
                                       }`}
                                     >
-                                      {isCompleted ? "CONCLUÍDO" : `${daysDiff} dias`}
+                                      {isCompleted
+                                        ? "CONCLUÍDO"
+                                        : `${daysDiff} dias`}
                                     </span>
                                   </div>
                                 </td>
@@ -7583,7 +8694,11 @@ service cloud.firestore {
                                     </button>
                                     <button
                                       onClick={() => {
-                                        if (window.confirm("Remover prazo definitivamente?"))
+                                        if (
+                                          window.confirm(
+                                            "Remover prazo definitivamente?",
+                                          )
+                                        )
                                           deleteDeadline(d.id);
                                       }}
                                       className="p-1 bg-red-50 text-red-600 hover:text-white hover:bg-red-600 rounded-md transition-all shadow-sm"
@@ -7601,7 +8716,8 @@ service cloud.firestore {
                     </div>
                   ) : (
                     <div className="p-12 text-center text-slate-400 font-bold uppercase text-[9px] tracking-widest">
-                      Nenhum prazo encontrado correspondente aos filtros de busca
+                      Nenhum prazo encontrado correspondente aos filtros de
+                      busca
                     </div>
                   )}
                 </div>
@@ -7718,8 +8834,18 @@ service cloud.firestore {
                   const tasksForDay = adminTasks.filter((t) => {
                     if (t.date !== dayStr) return false;
                     if (userProfile?.role === UserRole.ADMIN) return true;
-                    if (userProfile?.role === UserRole.COORDINATOR && (!t.sector || t.sector === userProfile.sector || t.sector === Sector.GENERAL)) return true;
-                    if (userProfile?.role === UserRole.LAWYER && (t.userId === user?.uid || t.assignedTo === user?.uid)) return true;
+                    if (
+                      userProfile?.role === UserRole.COORDINATOR &&
+                      (!t.sector ||
+                        t.sector === userProfile.sector ||
+                        t.sector === Sector.GENERAL)
+                    )
+                      return true;
+                    if (
+                      userProfile?.role === UserRole.LAWYER &&
+                      (t.userId === user?.uid || t.assignedTo === user?.uid)
+                    )
+                      return true;
                     if (userProfile?.role === UserRole.INTERN) return true;
                     return false;
                   });
@@ -7752,8 +8878,9 @@ service cloud.firestore {
                             </span>
                           </div>
                         )}
-                        {tasksForDay.length > 0 && tasksForDay.map((task) => (
-                          <div
+                        {tasksForDay.length > 0 &&
+                          tasksForDay.map((task) => (
+                            <div
                               key={task.id}
                               onClick={(e) => {
                                 // Evitar que cliques nos botões de ação abram o modal de detalhes
@@ -7776,7 +8903,10 @@ service cloud.firestore {
                                 </span>
                                 {task.assignedTo && (
                                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1">
-                                    <Icons.Users className="w-2 h-2" /> {teamProfiles.find(t => t.id === task.assignedTo)?.name || "Membro"}
+                                    <Icons.Users className="w-2 h-2" />{" "}
+                                    {teamProfiles.find(
+                                      (t) => t.id === task.assignedTo,
+                                    )?.name || "Membro"}
                                   </span>
                                 )}
                               </div>
@@ -7819,14 +8949,14 @@ service cloud.firestore {
                               </div>
                             </div>
                           ))}
-                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
         {view === "correspondence" && (
           <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
@@ -7883,13 +9013,15 @@ service cloud.firestore {
               {/* Controles Principais: Seletor de Tipo e Ajuste de Faixa */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-2">Visualizar:</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-2">
+                    Visualizar:
+                  </span>
                   <div className="flex p-1 bg-slate-100 rounded-xl">
                     <button
                       onClick={() => setActiveCorrespondenceTab("oficio")}
                       className={`px-4 py-2 rounded-lg font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all ${
-                        activeCorrespondenceTab === "oficio" 
-                          ? "bg-blue-600 text-white shadow-sm" 
+                        activeCorrespondenceTab === "oficio"
+                          ? "bg-blue-600 text-white shadow-sm"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
@@ -7898,8 +9030,8 @@ service cloud.firestore {
                     <button
                       onClick={() => setActiveCorrespondenceTab("memorando")}
                       className={`px-4 py-2 rounded-lg font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all ${
-                        activeCorrespondenceTab === "memorando" 
-                          ? "bg-amber-600 text-white shadow-sm" 
+                        activeCorrespondenceTab === "memorando"
+                          ? "bg-amber-600 text-white shadow-sm"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
@@ -7909,15 +9041,17 @@ service cloud.firestore {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-2">Limite:</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-2">
+                    Limite:
+                  </span>
                   <div className="flex p-1 bg-slate-100 rounded-xl">
                     {[50, 100, 150, 200].map((range) => (
                       <button
                         key={range}
                         onClick={() => setMaxOficioRange(range)}
                         className={`px-3 py-1.5 rounded-lg font-black text-[9px] md:text-[10px] transition-all ${
-                          maxOficioRange === range 
-                            ? "bg-slate-800 text-white shadow-sm" 
+                          maxOficioRange === range
+                            ? "bg-slate-800 text-white shadow-sm"
                             : "text-slate-500 hover:text-slate-800"
                         }`}
                       >
@@ -7936,7 +9070,9 @@ service cloud.firestore {
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                   <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
-                    {activeCorrespondenceTab === "oficio" ? "Painel de Ofícios" : "Painel de Memorandos"}
+                    {activeCorrespondenceTab === "oficio"
+                      ? "Painel de Ofícios"
+                      : "Painel de Memorandos"}
                   </h4>
                 </div>
 
@@ -7946,7 +9082,9 @@ service cloud.firestore {
                     <span>Disponível</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className={`w-3 h-3 rounded-md border ${activeCorrespondenceTab === "oficio" ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}></span>
+                    <span
+                      className={`w-3 h-3 rounded-md border ${activeCorrespondenceTab === "oficio" ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}
+                    ></span>
                     <span>Próximo</span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -7958,73 +9096,85 @@ service cloud.firestore {
 
               {/* Grid maximizada */}
               <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 lg:grid-cols-12 xl:grid-cols-16 gap-2">
-                {Array.from({ length: maxOficioRange }, (_, i) => i + 1).map((num) => {
-                  const currentList =
-                    activeCorrespondenceTab === "oficio"
-                      ? usedOficioNumbers
-                      : usedMemorandoNumbers;
-                  const isUsed = currentList.includes(num);
-                  const isNext =
-                    num ===
-                    (activeCorrespondenceTab === "oficio"
-                      ? nextOficioNumber
-                      : nextMemorandoNumber);
-                  
-                  const detail = activeCorrespondenceTab === "oficio" ? oficioDetails[num] : memorandoDetails[num];
-                  const hasAuthorizationToUnreserve = userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR;
-                  
-                  let tooltip = "";
-                  if (isUsed) {
-                    if (detail) {
-                      tooltip = `Reservado por ${detail.userName} para o prazo "${detail.deadlinePeca || "Geral"}" de ${detail.deadlineEmpresa || "Cliente"}.${hasAuthorizationToUnreserve ? " Clique para desmarcar." : " Apenas coordenadores/administradores desmarcam."}`;
-                    } else {
-                      tooltip = `Reservado.${hasAuthorizationToUnreserve ? " Clique para desmarcar." : " Apenas coordenadores/administradores desmarcam."}`;
-                    }
-                  } else if (isNext) {
-                    tooltip = `Próximo número sugerido de ${activeCorrespondenceTab === "oficio" ? "Ofício" : "Memorando"}. Clique para vincular a um prazo e reservar.`;
-                  } else {
-                    tooltip = `Número disponível. Clique para vincular a um prazo e reservar.`;
-                  }
-                  
-                  return (
-                    <button
-                      key={num}
-                      onClick={() =>
-                        handleToggleCorrespondenceNumber(
-                          num,
-                          activeCorrespondenceTab,
-                        )
+                {Array.from({ length: maxOficioRange }, (_, i) => i + 1).map(
+                  (num) => {
+                    const currentList =
+                      activeCorrespondenceTab === "oficio"
+                        ? usedOficioNumbers
+                        : usedMemorandoNumbers;
+                    const isUsed = currentList.includes(num);
+                    const isNext =
+                      num ===
+                      (activeCorrespondenceTab === "oficio"
+                        ? nextOficioNumber
+                        : nextMemorandoNumber);
+
+                    const detail =
+                      activeCorrespondenceTab === "oficio"
+                        ? oficioDetails[num]
+                        : memorandoDetails[num];
+                    const hasAuthorizationToUnreserve =
+                      userProfile?.role === UserRole.ADMIN ||
+                      userProfile?.role === UserRole.COORDINATOR;
+
+                    let tooltip = "";
+                    if (isUsed) {
+                      if (detail) {
+                        tooltip = `Reservado por ${detail.userName} para o prazo "${detail.deadlinePeca || "Geral"}" de ${detail.deadlineEmpresa || "Cliente"}.${hasAuthorizationToUnreserve ? " Clique para desmarcar." : " Apenas coordenadores/administradores desmarcam."}`;
+                      } else {
+                        tooltip = `Reservado.${hasAuthorizationToUnreserve ? " Clique para desmarcar." : " Apenas coordenadores/administradores desmarcam."}`;
                       }
-                      className={`h-11 md:h-12 flex flex-col items-center justify-center rounded-xl font-bold text-xs transition-all border relative cursor-pointer group ${
-                        isUsed 
-                          ? "bg-red-50 border-red-100 text-red-600 hover:bg-red-100/50" 
-                          : isNext 
-                            ? (activeCorrespondenceTab === "oficio" 
-                                ? "border-blue-600 text-blue-600 bg-blue-50/70 shadow-sm" 
-                                : "border-amber-600 text-amber-600 bg-amber-50/70 shadow-sm") + " animate-pulse font-black" 
-                            : "bg-slate-50/50 hover:bg-white hover:shadow-sm hover:border-slate-300 border-slate-100 text-slate-600"
-                      }`}
-                      title={tooltip}
-                    >
-                      {isUsed && (
-                        <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></div>
-                      )}
-                      {!isUsed && isNext && (
-                        <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${activeCorrespondenceTab === "oficio" ? "bg-blue-500" : "bg-amber-500"}`}></div>
-                      )}
-                      <span className="text-xs tracking-tight font-mono">
-                        {num.toString().padStart(3, "0")}
-                      </span>
-                    </button>
-                  );
-                })}
+                    } else if (isNext) {
+                      tooltip = `Próximo número sugerido de ${activeCorrespondenceTab === "oficio" ? "Ofício" : "Memorando"}. Clique para vincular a um prazo e reservar.`;
+                    } else {
+                      tooltip = `Número disponível. Clique para vincular a um prazo e reservar.`;
+                    }
+
+                    return (
+                      <button
+                        key={num}
+                        onClick={() =>
+                          handleToggleCorrespondenceNumber(
+                            num,
+                            activeCorrespondenceTab,
+                          )
+                        }
+                        className={`h-11 md:h-12 flex flex-col items-center justify-center rounded-xl font-bold text-xs transition-all border relative cursor-pointer group ${
+                          isUsed
+                            ? "bg-red-50 border-red-100 text-red-600 hover:bg-red-100/50"
+                            : isNext
+                              ? (activeCorrespondenceTab === "oficio"
+                                  ? "border-blue-600 text-blue-600 bg-blue-50/70 shadow-sm"
+                                  : "border-amber-600 text-amber-600 bg-amber-50/70 shadow-sm") +
+                                " animate-pulse font-black"
+                              : "bg-slate-50/50 hover:bg-white hover:shadow-sm hover:border-slate-300 border-slate-100 text-slate-600"
+                        }`}
+                        title={tooltip}
+                      >
+                        {isUsed && (
+                          <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></div>
+                        )}
+                        {!isUsed && isNext && (
+                          <div
+                            className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${activeCorrespondenceTab === "oficio" ? "bg-blue-500" : "bg-amber-500"}`}
+                          ></div>
+                        )}
+                        <span className="text-xs tracking-tight font-mono">
+                          {num.toString().padStart(3, "0")}
+                        </span>
+                      </button>
+                    );
+                  },
+                )}
               </div>
 
               {/* Dica de uso */}
               <div className="mt-6 flex items-center justify-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100">
                 <Icons.Sparkles className="w-4 h-4 text-slate-400 shrink-0 animate-bounce" />
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">
-                  Dica: Clique em qualquer número disponível para vinculá-lo a um prazo e reservá-lo. Apenas coordenadores e administradores possuem permissão para desmarcar.
+                  Dica: Clique em qualquer número disponível para vinculá-lo a
+                  um prazo e reservá-lo. Apenas coordenadores e administradores
+                  possuem permissão para desmarcar.
                 </p>
               </div>
 
@@ -8035,18 +9185,30 @@ service cloud.firestore {
                     <Icons.List className="w-3.5 h-3.5" />
                   </div>
                   <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
-                    Vínculos e Auditoria de Numerações ({activeCorrespondenceTab === "oficio" ? "Ofícios" : "Memorandos"})
+                    Vínculos e Auditoria de Numerações (
+                    {activeCorrespondenceTab === "oficio"
+                      ? "Ofícios"
+                      : "Memorandos"}
+                    )
                   </h4>
                 </div>
 
                 {(() => {
-                  const currentList = activeCorrespondenceTab === "oficio" ? usedOficioNumbers : usedMemorandoNumbers;
-                  const currentDetails = activeCorrespondenceTab === "oficio" ? oficioDetails : memorandoDetails;
+                  const currentList =
+                    activeCorrespondenceTab === "oficio"
+                      ? usedOficioNumbers
+                      : usedMemorandoNumbers;
+                  const currentDetails =
+                    activeCorrespondenceTab === "oficio"
+                      ? oficioDetails
+                      : memorandoDetails;
 
-                  const reservedItems = currentList.map(num => ({
-                    num,
-                    detail: currentDetails[num]
-                  })).sort((a, b) => a.num - b.num);
+                  const reservedItems = currentList
+                    .map((num) => ({
+                      num,
+                      detail: currentDetails[num],
+                    }))
+                    .sort((a, b) => a.num - b.num);
 
                   if (reservedItems.length === 0) {
                     return (
@@ -8056,7 +9218,9 @@ service cloud.firestore {
                     );
                   }
 
-                  const hasAuthorizationToUnreserve = userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR;
+                  const hasAuthorizationToUnreserve =
+                    userProfile?.role === UserRole.ADMIN ||
+                    userProfile?.role === UserRole.COORDINATOR;
 
                   return (
                     <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
@@ -8068,32 +9232,60 @@ service cloud.firestore {
                             <th className="py-3 px-4">Prazo / Peça</th>
                             <th className="py-3 px-4">Reservado Por</th>
                             <th className="py-3 px-4">Data da Reserva</th>
-                            <th className="py-3 px-4 text-right font-mono">Ações</th>
+                            <th className="py-3 px-4 text-right font-mono">
+                              Ações
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                           {reservedItems.map(({ num, detail }) => (
-                            <tr key={num} className="hover:bg-slate-50/50 transition-colors text-xs font-semibold text-slate-700">
+                            <tr
+                              key={num}
+                              className="hover:bg-slate-50/50 transition-colors text-xs font-semibold text-slate-700"
+                            >
                               <td className="py-3 px-4 font-mono font-bold text-red-600">
                                 {num.toString().padStart(3, "0")}
                               </td>
                               <td className="py-3 px-4 text-slate-500 font-mono text-[10px] uppercase">
-                                {detail?.deadlineEmpresa || <span className="text-slate-300 font-sans italic text-[9px]">Não informado (legado)</span>}
+                                {detail?.deadlineEmpresa || (
+                                  <span className="text-slate-300 font-sans italic text-[9px]">
+                                    Não informado (legado)
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-4">
                                 <span className="font-bold text-slate-800">
-                                  {detail?.deadlinePeca || <span className="text-slate-300 font-normal italic">Não informado (legado)</span>}
+                                  {detail?.deadlinePeca || (
+                                    <span className="text-slate-300 font-normal italic">
+                                      Não informado (legado)
+                                    </span>
+                                  )}
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-slate-500">
-                                {detail?.userName || <span className="text-slate-300 italic">Desconhecido</span>}
+                                {detail?.userName || (
+                                  <span className="text-slate-300 italic">
+                                    Desconhecido
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-4 text-slate-400 font-mono text-[10px]">
-                                {detail?.timestamp ? new Date(detail.timestamp).toLocaleString("pt-BR") : <span className="text-slate-300">-</span>}
+                                {detail?.timestamp ? (
+                                  new Date(detail.timestamp).toLocaleString(
+                                    "pt-BR",
+                                  )
+                                ) : (
+                                  <span className="text-slate-300">-</span>
+                                )}
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <button
-                                  onClick={() => handleToggleCorrespondenceNumber(num, activeCorrespondenceTab)}
+                                  onClick={() =>
+                                    handleToggleCorrespondenceNumber(
+                                      num,
+                                      activeCorrespondenceTab,
+                                    )
+                                  }
                                   disabled={!hasAuthorizationToUnreserve}
                                   className={`p-1.5 rounded-lg border transition-all inline-flex items-center justify-center ${
                                     hasAuthorizationToUnreserve
@@ -8122,7 +9314,7 @@ service cloud.firestore {
         )}
 
         {view === "documents" && <DocGenerator clients={clients} />}
-        
+
         {view === "finance" && userProfile?.role === UserRole.ADMIN && (
           <FinanceManagement
             userProfile={userProfile}
@@ -8137,158 +9329,219 @@ service cloud.firestore {
             onDeleteRecurringExpense={handleDeleteRecurringExpense}
           />
         )}
-        
+
         {view === "monitoring" && (
-          <MonitoringView 
+          <MonitoringView
             processes={monitoredProcesses}
             clients={clients}
             isAdding={isAddingMonitoredProcess}
             onSetIsAdding={setIsAddingMonitoredProcess}
             onAdd={async (cnj, clId) => {
-               if(!userProfile) return;
-               setIsSyncing(true);
-               try {
-                 console.log("[Monitoring] Starting search for:", cnj);
-                 const res = await fetch('/api/datajud/search', {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ cnj })
-                 });
-                 
-                 const data = await res.json();
-                 if(!res.ok) {
-                   throw new Error(data.error || "Erro ao consultar a API");
-                 }
-                 
-                 const hit = data.hits?.hits?.[0]?._source;
-                 if(!hit) throw new Error("Processo não encontrado nos registros do tribunal informado.");
-                 
-                 const rawParties = getRawParties(hit);
-                 const partyNames = getParties(hit);
-                 
-                 // Filtrar para garantir que o nome da classe ou assunto não entre como nome de parte
-                 const cleanParties = partyNames.filter(name => 
-                   name !== (hit.classe?.nome || "").toUpperCase() && 
-                   !(hit.assuntos || []).some((a: any) => (a.nome || "").toUpperCase() === name)
-                 );
-                 
-                 let finalClientId = clId;
-                 if (!finalClientId) {
-                   const matchedClient = clients.find(c => 
-                     partyNames.some(pName => pName.includes(c.name.toUpperCase()) || c.name.toUpperCase().includes(pName))
-                   );
-                   if (matchedClient) finalClientId = matchedClient.id;
-                 }
+              if (!userProfile) return;
+              setIsSyncing(true);
+              try {
+                console.log("[Monitoring] Starting search for:", cnj);
+                const res = await fetch("/api/datajud/search", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ cnj }),
+                });
 
-                 const movements = (hit.movimentos || [])
-                   .map((m: any) => ({
-                      dataHora: m.dataHora || new Date().toISOString(),
-                      descricao: m.movimentoNacional?.nome || 
-                                m.movimentoNacional?.descricao || 
-                                m.movimentoLocal?.nome || 
-                                m.movimentoLocal?.descricao || 
-                                m.descricao || 
-                                m.nome || 
-                                m.texto || 
-                                m.tipo || 
-                                "Sem descrição",
-                      complementos: (m.complementos || m.complemento || [])?.map((c: any) => c.nome ? `${c.nome}: ${c.valor}` : (c.descricao ? `${c.descricao}: ${c.valor}` : c.valor)).filter(Boolean) || []
-                   }))
-                   .sort((a: any, b: any) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());
+                const data = await res.json();
+                if (!res.ok) {
+                  throw new Error(data.error || "Erro ao consultar a API");
+                }
 
-                 const newProc: any = {
-                   cnj: String(cnj || ""),
-                   parties: cleanParties.slice(0, 5),
-                   classe: String(hit.classe?.nome || "Classe não informada"),
-                   clientName: String(
-                     finalClientId ? (clients.find(c => c.id === finalClientId)?.name || "Cliente") :
-                     "Não Identificado"
-                   ),
-                   lastUpdate: new Date().toISOString(),
-                   movements,
-                   status: String(hit.situacaoProcesso || "Ativo"),
-                   court: String(hit.tribunal || "Tribunal"),
-                   grau: String(hit.grau || ""),
-                   officeId: userProfile.officeId || "",
-                   sector: userProfile.sector || Sector.GENERAL,
-                   userId: userProfile.id || "",
-                   createdAt: new Date().toISOString(),
-                 };
+                const hit = data.hits?.hits?.[0]?._source;
+                if (!hit)
+                  throw new Error(
+                    "Processo não encontrado nos registros do tribunal informado.",
+                  );
 
-                 if (finalClientId) {
-                   newProc.clientId = String(finalClientId);
-                 }
+                const rawParties = getRawParties(hit);
+                const partyNames = getParties(hit);
 
-                 // Clean undefined
-                 Object.keys(newProc).forEach(k => { if(newProc[k] === undefined) delete newProc[k]; });
+                // Filtrar para garantir que o nome da classe ou assunto não entre como nome de parte
+                const cleanParties = partyNames.filter(
+                  (name) =>
+                    name !== (hit.classe?.nome || "").toUpperCase() &&
+                    !(hit.assuntos || []).some(
+                      (a: any) => (a.nome || "").toUpperCase() === name,
+                    ),
+                );
 
-                 console.log("[Monitoring] Adding doc to Firestore:", newProc);
-                 await addDoc(collection(db, "monitoredProcesses"), newProc);
-                 alert(finalClientId ? "Processo adicionado e vinculado ao cliente!" : "Processo adicionado ao monitoramento!");
-               } catch (err: any) {
-                 console.error("[Monitoring] Full Error:", err);
-                 alert("Erro ao cadastrar: " + (err.message || "Erro desconhecido"));
-               } finally {
-                 setIsSyncing(false);
-               }
+                let finalClientId = clId;
+                if (!finalClientId) {
+                  const matchedClient = clients.find((c) =>
+                    partyNames.some(
+                      (pName) =>
+                        pName.includes(c.name.toUpperCase()) ||
+                        c.name.toUpperCase().includes(pName),
+                    ),
+                  );
+                  if (matchedClient) finalClientId = matchedClient.id;
+                }
+
+                const movements = (hit.movimentos || [])
+                  .map((m: any) => ({
+                    dataHora: m.dataHora || new Date().toISOString(),
+                    descricao:
+                      m.movimentoNacional?.nome ||
+                      m.movimentoNacional?.descricao ||
+                      m.movimentoLocal?.nome ||
+                      m.movimentoLocal?.descricao ||
+                      m.descricao ||
+                      m.nome ||
+                      m.texto ||
+                      m.tipo ||
+                      "Sem descrição",
+                    complementos:
+                      (m.complementos || m.complemento || [])
+                        ?.map((c: any) =>
+                          c.nome
+                            ? `${c.nome}: ${c.valor}`
+                            : c.descricao
+                              ? `${c.descricao}: ${c.valor}`
+                              : c.valor,
+                        )
+                        .filter(Boolean) || [],
+                  }))
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(b.dataHora).getTime() -
+                      new Date(a.dataHora).getTime(),
+                  );
+
+                const newProc: any = {
+                  cnj: String(cnj || ""),
+                  parties: cleanParties.slice(0, 5),
+                  classe: String(hit.classe?.nome || "Classe não informada"),
+                  clientName: String(
+                    finalClientId
+                      ? clients.find((c) => c.id === finalClientId)?.name ||
+                          "Cliente"
+                      : "Não Identificado",
+                  ),
+                  lastUpdate: new Date().toISOString(),
+                  movements,
+                  status: String(hit.situacaoProcesso || "Ativo"),
+                  court: String(hit.tribunal || "Tribunal"),
+                  grau: String(hit.grau || ""),
+                  officeId: userProfile.officeId || "",
+                  sector: userProfile.sector || Sector.GENERAL,
+                  userId: userProfile.id || "",
+                  createdAt: new Date().toISOString(),
+                };
+
+                if (finalClientId) {
+                  newProc.clientId = String(finalClientId);
+                }
+
+                // Clean undefined
+                Object.keys(newProc).forEach((k) => {
+                  if (newProc[k] === undefined) delete newProc[k];
+                });
+
+                console.log("[Monitoring] Adding doc to Firestore:", newProc);
+                await addDoc(collection(db, "monitoredProcesses"), newProc);
+                alert(
+                  finalClientId
+                    ? "Processo adicionado e vinculado ao cliente!"
+                    : "Processo adicionado ao monitoramento!",
+                );
+              } catch (err: any) {
+                console.error("[Monitoring] Full Error:", err);
+                alert(
+                  "Erro ao cadastrar: " + (err.message || "Erro desconhecido"),
+                );
+              } finally {
+                setIsSyncing(false);
+              }
             }}
             onRemove={async (id) => {
-              if(!window.confirm("Deseja realmente parar de monitorar e excluir este processo?")) return;
+              if (
+                !window.confirm(
+                  "Deseja realmente parar de monitorar e excluir este processo?",
+                )
+              )
+                return;
               try {
                 await deleteDoc(doc(db, "monitoredProcesses", id));
                 alert("Processo excluído com sucesso!");
               } catch (err: any) {
                 console.error("[onRemove] Error removing doc:", err);
-                alert("Erro ao excluir processo do monitoramento: " + (err.message || "Erro desconhecido"));
+                alert(
+                  "Erro ao excluir processo do monitoramento: " +
+                    (err.message || "Erro desconhecido"),
+                );
               }
             }}
             onRefresh={async (proc) => {
-               setIsSyncing(true);
-               try {
-                 const res = await fetch('/api/datajud/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cnj: proc.cnj })
-                  });
-                  const data = await res.json();
-                  const hit = data.hits?.hits?.[0]?._source;
-                  if(!hit) return;
+              setIsSyncing(true);
+              try {
+                const res = await fetch("/api/datajud/search", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ cnj: proc.cnj }),
+                });
+                const data = await res.json();
+                const hit = data.hits?.hits?.[0]?._source;
+                if (!hit) return;
 
-                  const rawParties = getRawParties(hit);
-                  const partyNames = getParties(hit);
+                const rawParties = getRawParties(hit);
+                const partyNames = getParties(hit);
 
-                  const cleanParties = partyNames.filter(name => 
-                    name !== (hit.classe?.nome || "").toUpperCase() && 
-                    !(hit.assuntos || []).some((a: any) => (a.nome || "").toUpperCase() === name)
+                const cleanParties = partyNames.filter(
+                  (name) =>
+                    name !== (hit.classe?.nome || "").toUpperCase() &&
+                    !(hit.assuntos || []).some(
+                      (a: any) => (a.nome || "").toUpperCase() === name,
+                    ),
+                );
+
+                const movements = (hit.movimentos || hit.movimentacao || [])
+                  .map((m: any) => ({
+                    dataHora: m.dataHora,
+                    descricao:
+                      m.movimentoNacional?.nome ||
+                      m.movimentoNacional?.descricao ||
+                      m.movimentoLocal?.nome ||
+                      m.movimentoLocal?.descricao ||
+                      m.descricao ||
+                      m.nome ||
+                      m.texto ||
+                      m.tipo ||
+                      "Sem descrição",
+                    complementos:
+                      (m.complementos || m.complemento || [])
+                        ?.map((c: any) =>
+                          c.nome
+                            ? `${c.nome}: ${c.valor}`
+                            : c.descricao
+                              ? `${c.descricao}: ${c.valor}`
+                              : c.valor,
+                        )
+                        .filter(Boolean) || [],
+                  }))
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(b.dataHora).getTime() -
+                      new Date(a.dataHora).getTime(),
                   );
 
-                  const movements = (hit.movimentos || hit.movimentacao || []).map((m: any) => ({
-                    dataHora: m.dataHora,
-                    descricao: m.movimentoNacional?.nome || 
-                               m.movimentoNacional?.descricao || 
-                               m.movimentoLocal?.nome || 
-                               m.movimentoLocal?.descricao || 
-                               m.descricao || 
-                               m.nome || 
-                               m.texto || 
-                               m.tipo || 
-                               "Sem descrição",
-                    complementos: (m.complementos || m.complemento || [])?.map((c: any) => c.nome ? `${c.nome}: ${c.valor}` : (c.descricao ? `${c.descricao}: ${c.valor}` : c.valor)).filter(Boolean) || []
-                  })).sort((a: any, b: any) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());
-
-                  await updateDoc(doc(db, "monitoredProcesses", proc.id), {
-                    movements,
-                    parties: cleanParties.slice(0, 5),
-                    classe: String(hit.classe?.nome || ""),
-                    grau: String(hit.grau || ""),
-                    lastUpdate: new Date().toISOString(),
-                    status: hit.situacaoProcesso || "Ativo"
-                  });
-               } catch (e) {
-                  console.error(e);
-               } finally {
-                  setIsSyncing(false);
-               }
+                await updateDoc(doc(db, "monitoredProcesses", proc.id), {
+                  movements,
+                  parties: cleanParties.slice(0, 5),
+                  classe: String(hit.classe?.nome || ""),
+                  grau: String(hit.grau || ""),
+                  lastUpdate: new Date().toISOString(),
+                  status: hit.situacaoProcesso || "Ativo",
+                });
+              } catch (e) {
+                console.error(e);
+              } finally {
+                setIsSyncing(false);
+              }
             }}
             onUpdate={async (proc) => {
               try {
@@ -8310,7 +9563,7 @@ service cloud.firestore {
           <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
             <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -translate-y-12 translate-x-12 opacity-50 group-hover:scale-110 transition-all"></div>
-              
+
               <div className="flex items-center gap-4 mb-6 relative">
                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
                   <Icons.Clock />
@@ -8320,7 +9573,8 @@ service cloud.firestore {
                     Filtros do Relatório
                   </h3>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                    Personalize as opções abaixo para gerar e exportar relatórios de prazos
+                    Personalize as opções abaixo para gerar e exportar
+                    relatórios de prazos
                   </p>
                 </div>
               </div>
@@ -8435,86 +9689,121 @@ service cloud.firestore {
                   </div>
                 ) : (
                   filteredDeadlines.map((d) => {
-                     const isMyDeadline = d.assignedTo === userProfile?.id || (d.responsavel && userProfile?.name && d.responsavel.toLowerCase().trim() === userProfile.name.toLowerCase().trim());
-                     let cardClasses = "p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center transition-colors gap-4 border border-transparent";
-                     let statusText = d.status as string;
-                     let statusLabelClasses = d.status === DeadlineStatus.COMPLETED 
-                              ? "bg-emerald-100 text-emerald-700 border border-emerald-200" 
-                              : "bg-amber-100 text-amber-700 border border-amber-200";
+                    const isMyDeadline =
+                      d.assignedTo === userProfile?.id ||
+                      (d.responsavel &&
+                        userProfile?.name &&
+                        d.responsavel.toLowerCase().trim() ===
+                          userProfile.name.toLowerCase().trim());
+                    let cardClasses =
+                      "p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center transition-colors gap-4 border border-transparent";
+                    let statusText = d.status as string;
+                    let statusLabelClasses =
+                      d.status === DeadlineStatus.COMPLETED
+                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                        : "bg-amber-100 text-amber-700 border border-amber-200";
 
-                     if (d.status !== DeadlineStatus.COMPLETED) {
-                        cardClasses += " hover:bg-slate-50/40";
-                        if (d.reviewState === ReviewState.WAITING_COORDINATOR || d.reviewState === ReviewState.REVIEWING_COORDINATOR || d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR) {
-                           cardClasses += " bg-yellow-50/30 border-yellow-200";
-                           statusText = "Em Coodenação";
-                           statusLabelClasses = "bg-yellow-200 text-yellow-800 border-yellow-300";
-                           if (d.reviewState !== ReviewState.REVIEWING_COORDINATOR && userProfile?.role === UserRole.COORDINATOR) {
-                              cardClasses += " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
-                              statusText = "Coodenação (Pendente)";
-                           }
-                        } else if (d.reviewState === ReviewState.WAITING_ADMIN || d.reviewState === ReviewState.REVIEWING_ADMIN) {
-                           cardClasses += " bg-orange-50/30 border-orange-200";
-                           statusText = "Em Validação (Admin)";
-                           statusLabelClasses = "bg-orange-200 text-orange-800 border-orange-300";
-                           if (d.reviewState === ReviewState.WAITING_ADMIN && userProfile?.role === UserRole.ADMIN) {
-                              cardClasses += " animate-pulse ring-2 ring-orange-500 ring-offset-2";
-                              statusText = "Validação (Pendente)";
-                           }
-                        } else if (d.reviewState === ReviewState.RETURNED_TO_LAWYER) {
-                           cardClasses += " bg-red-50/30 border-red-200";
-                           statusText = "Devolvido p/ Ajustes";
-                           statusLabelClasses = "bg-red-200 text-red-800 border-red-300";
-                           if (userProfile?.role === UserRole.LAWYER && isMyDeadline) {
-                              cardClasses += " animate-pulse ring-2 ring-red-400 ring-offset-2";
-                           }
+                    if (d.status !== DeadlineStatus.COMPLETED) {
+                      cardClasses += " hover:bg-slate-50/40";
+                      if (
+                        d.reviewState === ReviewState.WAITING_COORDINATOR ||
+                        d.reviewState === ReviewState.REVIEWING_COORDINATOR ||
+                        d.reviewState ===
+                          ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
+                      ) {
+                        cardClasses += " bg-yellow-50/30 border-yellow-200";
+                        statusText = "Em Coodenação";
+                        statusLabelClasses =
+                          "bg-yellow-200 text-yellow-800 border-yellow-300";
+                        if (
+                          d.reviewState !== ReviewState.REVIEWING_COORDINATOR &&
+                          userProfile?.role === UserRole.COORDINATOR
+                        ) {
+                          cardClasses +=
+                            " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
+                          statusText = "Coodenação (Pendente)";
                         }
-                     } else {
-                        cardClasses += " border-emerald-50 hover:bg-emerald-50/20";
-                     }
+                      } else if (
+                        d.reviewState === ReviewState.WAITING_ADMIN ||
+                        d.reviewState === ReviewState.REVIEWING_ADMIN
+                      ) {
+                        cardClasses += " bg-orange-50/30 border-orange-200";
+                        statusText = "Em Validação (Admin)";
+                        statusLabelClasses =
+                          "bg-orange-200 text-orange-800 border-orange-300";
+                        if (
+                          d.reviewState === ReviewState.WAITING_ADMIN &&
+                          userProfile?.role === UserRole.ADMIN
+                        ) {
+                          cardClasses +=
+                            " animate-pulse ring-2 ring-orange-500 ring-offset-2";
+                          statusText = "Validação (Pendente)";
+                        }
+                      } else if (
+                        d.reviewState === ReviewState.RETURNED_TO_LAWYER
+                      ) {
+                        cardClasses += " bg-red-50/30 border-red-200";
+                        statusText = "Devolvido p/ Ajustes";
+                        statusLabelClasses =
+                          "bg-red-200 text-red-800 border-red-300";
+                        if (
+                          userProfile?.role === UserRole.LAWYER &&
+                          isMyDeadline
+                        ) {
+                          cardClasses +=
+                            " animate-pulse ring-2 ring-red-400 ring-offset-2";
+                        }
+                      }
+                    } else {
+                      cardClasses +=
+                        " border-emerald-50 hover:bg-emerald-50/20";
+                    }
 
-                     return (
-                    <div
-                      key={d.id}
-                      onClick={() => {
-                        setSelectedAppointment({
-                           type: "deadline",
-                           data: d,
-                        });
-                        setIsDetailsModalOpen(true);
-                      }}
-                      className={`${cardClasses} cursor-pointer rounded-xl`}
-                    >
-                      <div className="flex-1 sm:pr-8">
-                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <span className="text-[8px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                            {d.empresa}
-                          </span>
-                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                            • ADV: {d.responsavel}
-                          </span>
-                          {d.assignedTo && (
-                            <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md uppercase tracking-widest">
-                              Atribuído a: {teamProfiles.find(t => t.id === d.assignedTo)?.name || 'Membro'}
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => {
+                          setSelectedAppointment({
+                            type: "deadline",
+                            data: d,
+                          });
+                          setIsDetailsModalOpen(true);
+                        }}
+                        className={`${cardClasses} cursor-pointer rounded-xl`}
+                      >
+                        <div className="flex-1 sm:pr-8">
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span className="text-[8px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              {d.empresa}
                             </span>
-                          )}
+                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                              • ADV: {d.responsavel}
+                            </span>
+                            {d.assignedTo && (
+                              <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md uppercase tracking-widest">
+                                Atribuído a:{" "}
+                                {teamProfiles.find((t) => t.id === d.assignedTo)
+                                  ?.name || "Membro"}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-slate-800 text-xs md:text-sm uppercase tracking-tight">
+                            {d.peca}
+                          </h4>
                         </div>
-                        <h4 className="font-bold text-slate-800 text-xs md:text-sm uppercase tracking-tight">
-                          {d.peca}
-                        </h4>
+                        <div className="w-full sm:w-auto flex justify-between sm:justify-end items-center gap-6 border-t sm:border-t-0 pt-2 sm:pt-0 shrink-0">
+                          <span
+                            className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${statusLabelClasses}`}
+                          >
+                            {statusText}
+                          </span>
+                          <p className="font-black text-slate-950 text-xs md:text-sm tracking-tighter w-24 text-right font-mono">
+                            {formatLocalDate(d.data)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="w-full sm:w-auto flex justify-between sm:justify-end items-center gap-6 border-t sm:border-t-0 pt-2 sm:pt-0 shrink-0">
-                        <span
-                          className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${statusLabelClasses}`}
-                        >
-                          {statusText}
-                        </span>
-                        <p className="font-black text-slate-950 text-xs md:text-sm tracking-tighter w-24 text-right font-mono">
-                          {formatLocalDate(d.data)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                 })
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -8543,7 +9832,7 @@ service cloud.firestore {
             onRetroactiveEntry={() => setIsRetroactiveLogModalOpen(true)}
           />
         )}
-        
+
         {view === "settings" && (
           <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-10">
             {/* Backup e Restauração */}
@@ -8572,7 +9861,8 @@ service cloud.firestore {
                       Exportar Backup
                     </h4>
                     <p className="text-slate-500 text-[11px] leading-relaxed mb-4">
-                      Baixe uma cópia completa de todos os seus prazos, tarefas e configurações em formato JSON.
+                      Baixe uma cópia completa de todos os seus prazos, tarefas
+                      e configurações em formato JSON.
                     </p>
                     <button
                       onClick={handleExportBackup}
@@ -8589,7 +9879,8 @@ service cloud.firestore {
                     </h4>
                     <p className="text-slate-500 text-[11px] leading-relaxed mb-4">
                       Importe dados de um arquivo de backup anterior (.json).
-                      Nota: Isso adicionará os registros ao banco de dados atual.
+                      Nota: Isso adicionará os registros ao banco de dados
+                      atual.
                     </p>
                     <label className="block w-full bg-blue-600 text-white p-3 rounded-xl font-black text-[9px] uppercase tracking-widest text-center cursor-pointer hover:bg-blue-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5">
                       Selecionar Arquivo
@@ -8604,7 +9895,7 @@ service cloud.firestore {
                 </div>
               </div>
             )}
-            
+
             {/* INFORMAÇÕES PESSOAIS */}
             <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative group">
               <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -translate-y-12 translate-x-12 opacity-50 group-hover:scale-110 transition-all"></div>
@@ -8647,17 +9938,24 @@ service cloud.firestore {
                           setIsSavingSettings(true);
                           try {
                             if (user) {
-                              await updateDoc(doc(db, "userProfiles", user.uid), {
-                                name: tempPersonalName.trim(),
-                                oab: tempPersonalOab.trim(),
-                                ufOab: tempPersonalUf,
-                              });
-                              setUserProfile(prev => prev ? {
-                                ...prev,
-                                name: tempPersonalName.trim(),
-                                oab: tempPersonalOab.trim(),
-                                ufOab: tempPersonalUf
-                              } : null);
+                              await updateDoc(
+                                doc(db, "userProfiles", user.uid),
+                                {
+                                  name: tempPersonalName.trim(),
+                                  oab: tempPersonalOab.trim(),
+                                  ufOab: tempPersonalUf,
+                                },
+                              );
+                              setUserProfile((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      name: tempPersonalName.trim(),
+                                      oab: tempPersonalOab.trim(),
+                                      ufOab: tempPersonalUf,
+                                    }
+                                  : null,
+                              );
                               setPersonalOab(tempPersonalOab.trim());
                               setPersonalUf(tempPersonalUf);
                               setIsEditingPersonal(false);
@@ -8691,12 +9989,16 @@ service cloud.firestore {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     Seu Nome de Exibição
                   </label>
-                  <input 
+                  <input
                     type="text"
                     disabled={!isEditingPersonal}
                     className={`w-full p-3.5 rounded-xl font-bold outline-none focus:ring-4 focus:ring-emerald-100 transition-all placeholder:text-slate-300 ${!isEditingPersonal ? "bg-slate-100 border border-slate-100 text-slate-500 cursor-not-allowed" : "bg-slate-50 border border-slate-100 text-slate-900"}`}
                     placeholder="Ex: Rudy Endo"
-                    value={isEditingPersonal ? tempPersonalName : (userProfile?.name || "")}
+                    value={
+                      isEditingPersonal
+                        ? tempPersonalName
+                        : userProfile?.name || ""
+                    }
                     onChange={(e) => setTempPersonalName(e.target.value)}
                   />
                 </div>
@@ -8705,7 +10007,7 @@ service cloud.firestore {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     E-mail (Não editável)
                   </label>
-                  <input 
+                  <input
                     type="text"
                     disabled
                     className="w-full bg-slate-100 border border-slate-100 p-3.5 rounded-xl text-slate-400 font-bold cursor-not-allowed"
@@ -8717,7 +10019,7 @@ service cloud.firestore {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     Sua OAB Principal
                   </label>
-                  <input 
+                  <input
                     type="text"
                     disabled={!isEditingPersonal}
                     className={`w-full p-3.5 rounded-xl font-bold outline-none focus:ring-4 focus:ring-emerald-100 transition-all placeholder:text-slate-300 ${!isEditingPersonal ? "bg-slate-100 border border-slate-100 text-slate-500 cursor-not-allowed" : "bg-slate-50 border border-slate-100 text-slate-900"}`}
@@ -8737,7 +10039,11 @@ service cloud.firestore {
                     value={isEditingPersonal ? tempPersonalUf : personalUf}
                     onChange={(e) => setTempPersonalUf(e.target.value)}
                   >
-                    {rawUfs.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                    {rawUfs.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -8780,20 +10086,27 @@ service cloud.firestore {
                           onClick={async () => {
                             setIsSavingSettings(true);
                             try {
-                              const updatedName = tempOfficeName.toUpperCase().trim();
+                              const updatedName = tempOfficeName
+                                .toUpperCase()
+                                .trim();
                               await updateSettings({
                                 officeName: updatedName,
                                 officeLogo: tempOfficeLogo.trim(),
                               });
-                              setDynamicSettings(prev => ({
-                                  ...prev,
-                                  officeName: updatedName,
-                                  officeLogo: tempOfficeLogo.trim(),
+                              setDynamicSettings((prev) => ({
+                                ...prev,
+                                officeName: updatedName,
+                                officeLogo: tempOfficeLogo.trim(),
                               }));
                               setIsEditingOfficeIdentity(false);
                             } catch (err) {
-                              console.error("Erro ao salvar identidade visual:", err);
-                              alert("Ocorreu um erro ao salvar as configurações.");
+                              console.error(
+                                "Erro ao salvar identidade visual:",
+                                err,
+                              );
+                              alert(
+                                "Ocorreu um erro ao salvar as configurações.",
+                              );
                             } finally {
                               setIsSavingSettings(false);
                             }
@@ -8821,12 +10134,16 @@ service cloud.firestore {
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                         Nome do Escritório
                       </label>
-                      <input 
+                      <input
                         type="text"
                         disabled={!isEditingOfficeIdentity}
                         className={`w-full p-3.5 rounded-xl font-bold outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300 ${!isEditingOfficeIdentity ? "bg-slate-100 border border-slate-100 text-slate-500 cursor-not-allowed" : "bg-slate-50 border border-slate-100 text-slate-900"}`}
                         placeholder="Ex: SILVA & ASSOCIADOS"
-                        value={isEditingOfficeIdentity ? tempOfficeName : (dynamicSettings.officeName || "")}
+                        value={
+                          isEditingOfficeIdentity
+                            ? tempOfficeName
+                            : dynamicSettings.officeName || ""
+                        }
                         onChange={(e) => setTempOfficeName(e.target.value)}
                       />
                     </div>
@@ -8835,19 +10152,30 @@ service cloud.firestore {
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                         Logo do Escritório (URL da Imagem)
                       </label>
-                      <input 
+                      <input
                         type="text"
                         disabled={!isEditingOfficeIdentity}
                         className={`w-full p-3.5 rounded-xl font-bold outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300 ${!isEditingOfficeIdentity ? "bg-slate-100 border border-slate-100 text-slate-500 cursor-not-allowed" : "bg-slate-50 border border-slate-100 text-slate-900"}`}
                         placeholder="https://exemplo.com/sua-logo.png"
-                        value={isEditingOfficeIdentity ? tempOfficeLogo : (dynamicSettings.officeLogo || "")}
+                        value={
+                          isEditingOfficeIdentity
+                            ? tempOfficeLogo
+                            : dynamicSettings.officeLogo || ""
+                        }
                         onChange={(e) => setTempOfficeLogo(e.target.value)}
                       />
                       <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100/50">
                         <p className="text-[8px] text-blue-700 font-medium leading-relaxed">
-                          <span className="font-black uppercase tracking-tighter mr-1">Dica:</span>
-                          Utilize links <span className="font-bold">PNG transparente</span>, JPG ou SVG. 
-                          Tamanho ideal: <span className="font-bold">512x256 pixels (2:1)</span> retangular.
+                          <span className="font-black uppercase tracking-tighter mr-1">
+                            Dica:
+                          </span>
+                          Utilize links{" "}
+                          <span className="font-bold">PNG transparente</span>,
+                          JPG ou SVG. Tamanho ideal:{" "}
+                          <span className="font-bold">
+                            512x256 pixels (2:1)
+                          </span>{" "}
+                          retangular.
                         </p>
                       </div>
                     </div>
@@ -8858,10 +10186,18 @@ service cloud.firestore {
                       Pré-visualização
                     </p>
                     <div className="w-full max-w-[160px] aspect-[2/1] bg-white rounded-xl shadow-md flex items-center justify-center p-2 border border-slate-100 overflow-hidden">
-                      {(isEditingOfficeIdentity ? tempOfficeLogo : dynamicSettings.officeLogo) ? (
-                        <img 
-                          src={isEditingOfficeIdentity ? tempOfficeLogo : dynamicSettings.officeLogo} 
-                          alt="Preview Logo" 
+                      {(
+                        isEditingOfficeIdentity
+                          ? tempOfficeLogo
+                          : dynamicSettings.officeLogo
+                      ) ? (
+                        <img
+                          src={
+                            isEditingOfficeIdentity
+                              ? tempOfficeLogo
+                              : dynamicSettings.officeLogo
+                          }
+                          alt="Preview Logo"
                           className="max-h-full max-w-full object-contain"
                           referrerPolicy="no-referrer"
                         />
@@ -8893,7 +10229,8 @@ service cloud.firestore {
                       Configurações do Escritório
                     </h3>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                      Gerencie peças processuais, categorias de tarefas administrativas e tipos de documentos
+                      Gerencie peças processuais, categorias de tarefas
+                      administrativas e tipos de documentos
                     </p>
                   </div>
                 </div>
@@ -8916,7 +10253,9 @@ service cloud.firestore {
                             <input
                               type="text"
                               value={editingPecaValue}
-                              onChange={(e) => setEditingPecaValue(e.target.value)}
+                              onChange={(e) =>
+                                setEditingPecaValue(e.target.value)
+                              }
                               className="flex-1 mr-2 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 uppercase outline-none focus:ring-2 focus:ring-blue-500"
                               autoFocus
                             />
@@ -8932,8 +10271,12 @@ service cloud.firestore {
                                 <button
                                   onClick={() => {
                                     if (editingPecaValue.trim() !== "") {
-                                      const updatedList = [...dynamicSettings.pecas];
-                                      updatedList[i] = editingPecaValue.trim().toUpperCase();
+                                      const updatedList = [
+                                        ...dynamicSettings.pecas,
+                                      ];
+                                      updatedList[i] = editingPecaValue
+                                        .trim()
+                                        .toUpperCase();
                                       updateSettings("pecas", updatedList);
                                       setEditingPecaIdx(null);
                                     }
@@ -9022,7 +10365,8 @@ service cloud.firestore {
                 <div className="relative">
                   <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                    Categorias de Tarefas Administrativas ({(dynamicSettings.categoriasTarefas || []).length})
+                    Categorias de Tarefas Administrativas (
+                    {(dynamicSettings.categoriasTarefas || []).length})
                   </h4>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 pb-2">
@@ -9037,7 +10381,9 @@ service cloud.firestore {
                             <input
                               type="text"
                               value={editingCategoryValue}
-                              onChange={(e) => setEditingCategoryValue(e.target.value)}
+                              onChange={(e) =>
+                                setEditingCategoryValue(e.target.value)
+                              }
                               className="flex-1 mr-2 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 uppercase outline-none focus:ring-2 focus:ring-blue-500"
                               autoFocus
                             />
@@ -9053,9 +10399,17 @@ service cloud.firestore {
                                 <button
                                   onClick={() => {
                                     if (editingCategoryValue.trim() !== "") {
-                                      const updatedList = [...(dynamicSettings.categoriasTarefas || [])];
-                                      updatedList[i] = editingCategoryValue.trim().toUpperCase();
-                                      updateSettings("categoriasTarefas", updatedList);
+                                      const updatedList = [
+                                        ...(dynamicSettings.categoriasTarefas ||
+                                          []),
+                                      ];
+                                      updatedList[i] = editingCategoryValue
+                                        .trim()
+                                        .toUpperCase();
+                                      updateSettings(
+                                        "categoriasTarefas",
+                                        updatedList,
+                                      );
                                       setEditingCategoryIdx(null);
                                     }
                                   }}
@@ -9154,7 +10508,8 @@ service cloud.firestore {
                       Notificações e Alertas
                     </h3>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                      Gerencie as opções de alertas e as regras de prazos do sistema
+                      Gerencie as opções de alertas e as regras de prazos do
+                      sistema
                     </p>
                   </div>
                 </div>
@@ -9166,7 +10521,7 @@ service cloud.firestore {
                       Configurações Gerais
                     </h4>
                     <div className="space-y-3">
-                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl transition-all">
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl transition-all">
                         <div>
                           <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">
                             Alertas no Browser
@@ -9268,7 +10623,8 @@ service cloud.firestore {
                           Nenhuma regra de alerta definida
                         </p>
                         <p className="text-[9px] text-slate-400 mt-1">
-                          Crie regras para receber notificações baseadas no tipo de prazo
+                          Crie regras para receber notificações baseadas no tipo
+                          de prazo
                         </p>
                       </div>
                     ) : (
@@ -9360,95 +10716,236 @@ service cloud.firestore {
           title="Salvar Registro de Tempo"
         >
           <div className="space-y-4">
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
-               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tempo Contabilizado</p>
-               <p className="text-3xl font-mono font-black text-blue-600">
-                  {timerToStop ? `${Math.floor(stopTimerForm.durationSeconds / 3600).toString().padStart(2, "0")}:${Math.floor((stopTimerForm.durationSeconds % 3600) / 60).toString().padStart(2, "0")}:${Math.floor(stopTimerForm.durationSeconds % 60).toString().padStart(2, "0")}` : "00:00:00"}
-               </p>
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  Tempo Contabilizado
+                  <span className="text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-black">
+                    EDITÁVEL
+                  </span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-16 h-12 bg-white rounded-xl border border-slate-200 font-mono font-black text-xl text-center text-blue-600 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                    value={Math.floor(stopTimerForm.durationSeconds / 3600)}
+                    onChange={(e) => {
+                      const h = parseInt(e.target.value) || 0;
+                      const m = Math.floor(
+                        (stopTimerForm.durationSeconds % 3600) / 60,
+                      );
+                      setStopTimerForm({
+                        ...stopTimerForm,
+                        durationSeconds: h * 3600 + m * 60,
+                      });
+                    }}
+                  />
+                  <span className="font-black text-slate-400 text-lg">h</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    className="w-16 h-12 bg-white rounded-xl border border-slate-200 font-mono font-black text-xl text-center text-blue-600 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                    value={Math.floor(
+                      (stopTimerForm.durationSeconds % 3600) / 60,
+                    )}
+                    onChange={(e) => {
+                      const m = parseInt(e.target.value) || 0;
+                      const h = Math.floor(
+                        stopTimerForm.durationSeconds / 3600,
+                      );
+                      setStopTimerForm({
+                        ...stopTimerForm,
+                        durationSeconds: h * 3600 + m * 60,
+                      });
+                    }}
+                  />
+                  <span className="font-black text-slate-400 text-lg">m</span>
+                </div>
+              </div>
             </div>
-            
+
             {(!timerToStop || timerToStop.deadlineId.startsWith("general")) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente / Processo</label>
-                    <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={stopTimerForm.manualProcessTitle} onChange={e => setStopTimerForm({...stopTimerForm, manualProcessTitle: e.target.value})} placeholder="Ex: Cliente Silva" />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Tarefa Realizada</label>
-                    <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={stopTimerForm.manualPiece} onChange={e => setStopTimerForm({...stopTimerForm, manualPiece: e.target.value})} placeholder="Ex: Pesquisa de Jurisprudência" />
-                 </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Cliente / Processo
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                    value={stopTimerForm.manualProcessTitle}
+                    onChange={(e) =>
+                      setStopTimerForm({
+                        ...stopTimerForm,
+                        manualProcessTitle: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: Cliente Silva"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Tarefa Realizada
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                    value={stopTimerForm.manualPiece}
+                    onChange={(e) =>
+                      setStopTimerForm({
+                        ...stopTimerForm,
+                        manualPiece: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: Pesquisa de Jurisprudência"
+                  />
+                </div>
               </div>
             )}
-            
+
             <div className="space-y-1">
-               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 flex justify-between">
-                  <span>Descrição / Observações</span>
-                  <span className="text-red-500 font-bold">* Obrigatório para devoluções</span>
-               </label>
-               <textarea 
-                  className={`w-full bg-slate-50 p-3 min-h-[80px] rounded-xl border text-sm outline-none focus:ring-4 focus:ring-blue-100 ${stopTimerError ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-100'}`} 
-                  value={stopTimerForm.description} 
-                  onChange={e => {
-                     setStopTimerForm({...stopTimerForm, description: e.target.value});
-                     setStopTimerError("");
-                  }} 
-                  placeholder="Escreva sua observação. Atenção: caso deseje Devolver o prazo, preencha obrigatoriamente a justificativa." 
-               />
-               {stopTimerError && (
-                  <p className="text-[11px] font-black text-red-600 mt-1.5 flex items-center gap-1 bg-red-50 p-2.5 rounded-xl border border-red-200">
-                     <span>⚠ Justificativa Obrigatória:</span> {stopTimerError}
-                  </p>
-               )}
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 flex justify-between">
+                <span>Descrição / Observações</span>
+                <span className="text-red-500 font-bold">
+                  * Obrigatório para devoluções
+                </span>
+              </label>
+              <textarea
+                className={`w-full bg-slate-50 p-3 min-h-[80px] rounded-xl border text-sm outline-none focus:ring-4 focus:ring-blue-100 ${stopTimerError ? "border-red-500 ring-2 ring-red-100" : "border-slate-100"}`}
+                value={stopTimerForm.description}
+                onChange={(e) => {
+                  setStopTimerForm({
+                    ...stopTimerForm,
+                    description: e.target.value,
+                  });
+                  setStopTimerError("");
+                }}
+                placeholder="Escreva sua observação. Atenção: caso deseje Devolver o prazo, preencha obrigatoriamente a justificativa."
+              />
+              {stopTimerError && (
+                <p className="text-[11px] font-black text-red-600 mt-1.5 flex items-center gap-1 bg-red-50 p-2.5 rounded-xl border border-red-200">
+                  <span>⚠ Justificativa Obrigatória:</span> {stopTimerError}
+                </p>
+              )}
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex flex-wrap justify-end gap-3">
-               {timerToStop && !timerToStop.deadlineId.startsWith("general") ? (
-                  (() => {
-                     const t = timerToStop;
-                     const d = deadlines.find(dl => dl.id === t.deadlineId);
-                     const currentReviewState = d?.reviewState ?? t.reviewState ?? ReviewState.NONE;
-                     const isExecutor = currentReviewState === ReviewState.NONE || currentReviewState === ReviewState.RETURNED_TO_LAWYER;
+            <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-end gap-3">
+              {timerToStop && (
+                <button
+                  onClick={() => handleDiscardTimer(timerToStop.deadlineId)}
+                  className="w-full sm:w-auto mr-auto px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-red-500 hover:bg-red-50 hover:text-red-700 transition"
+                  title="Descartar cronômetro sem salvar"
+                >
+                  Descartar
+                </button>
+              )}
+              {timerToStop && !timerToStop.deadlineId.startsWith("general") ? (
+                (() => {
+                  const t = timerToStop;
+                  const d = deadlines.find((dl) => dl.id === t.deadlineId);
+                  const currentReviewState =
+                    d?.reviewState ?? t.reviewState ?? ReviewState.NONE;
+                  const isExecutor =
+                    currentReviewState === ReviewState.NONE ||
+                    currentReviewState === ReviewState.RETURNED_TO_LAWYER;
 
-                     return (
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsStopTimerModalOpen(false);
+                          setActiveTimers((cur) =>
+                            cur.map((curT) =>
+                              curT.deadlineId === t.deadlineId
+                                ? {
+                                    ...curT,
+                                    isPlaying: true,
+                                    lastStartedAt: Date.now(),
+                                  }
+                                : curT,
+                            ),
+                          );
+                        }}
+                        className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
+                      >
+                        Retomar
+                      </button>
+
+                      {isExecutor ? (
                         <>
-                           <button onClick={() => {
-                              setIsStopTimerModalOpen(false);
-                              setActiveTimers(cur => cur.map(curT => curT.deadlineId === t.deadlineId ? {...curT, isPlaying: true, lastStartedAt: Date.now()} : curT));
-                           }} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-amber-50 text-amber-600 hover:bg-amber-100 transition">Retomar</button>
-
-                           {isExecutor ? (
-                               <>
-                                 <button onClick={() => handleSaveTimeLog('SUBMIT')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition">
-                                    {userProfile?.role === UserRole.ADMIN ? "Concluir" : "Enviar para Revisão"}
-                                 </button>
-                               </>
-                           ) : (
-                               <>
-                                 {userProfile?.role === UserRole.COORDINATOR && (
-                                    <>
-                                       <button onClick={() => handleSaveTimeLog('RETURN')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-100 text-red-600 hover:bg-red-200 transition">Devolver</button>
-                                       <button onClick={() => handleSaveTimeLog('FORWARD')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-amber-500 text-white hover:bg-amber-600 transition">Remeter para Validação</button>
-                                       <button onClick={() => handleSaveTimeLog('COMPLETE')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 transition">Concluir</button>
-                                    </>
-                                 )}
-
-                                 {userProfile?.role === UserRole.ADMIN && (
-                                    <>
-                                       <button onClick={() => handleSaveTimeLog('RETURN')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-100 text-red-600 hover:bg-red-200 transition">Devolver</button>
-                                       <button onClick={() => handleSaveTimeLog('COMPLETE')} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 transition">Concluir</button>
-                                    </>
-                                 )}
-                               </>
-                           )}
+                          <button
+                            onClick={() => handleSaveTimeLog("SUBMIT")}
+                            className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition"
+                          >
+                            {userProfile?.role === UserRole.ADMIN
+                              ? "Concluir"
+                              : "Enviar para Revisão"}
+                          </button>
                         </>
-                     );
-                  })()
-               ) : (
-                  <>
-                     <button onClick={() => setIsStopTimerModalOpen(false)} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition">Cancelar</button>
-                     <button onClick={() => handleSaveTimeLog()} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition">Confirmar e Submeter</button>
-                  </>
-               )}
+                      ) : (
+                        <>
+                          {userProfile?.role === UserRole.COORDINATOR && (
+                            <>
+                              <button
+                                onClick={() => handleSaveTimeLog("RETURN")}
+                                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-100 text-red-600 hover:bg-red-200 transition"
+                              >
+                                Devolver
+                              </button>
+                              <button
+                                onClick={() => handleSaveTimeLog("FORWARD")}
+                                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-amber-500 text-white hover:bg-amber-600 transition"
+                              >
+                                Remeter para Validação
+                              </button>
+                              <button
+                                onClick={() => handleSaveTimeLog("COMPLETE")}
+                                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                              >
+                                Concluir
+                              </button>
+                            </>
+                          )}
+
+                          {userProfile?.role === UserRole.ADMIN && (
+                            <>
+                              <button
+                                onClick={() => handleSaveTimeLog("RETURN")}
+                                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-red-100 text-red-600 hover:bg-red-200 transition"
+                              >
+                                Devolver
+                              </button>
+                              <button
+                                onClick={() => handleSaveTimeLog("COMPLETE")}
+                                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                              >
+                                Concluir
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsStopTimerModalOpen(false)}
+                    className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleSaveTimeLog()}
+                    className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition"
+                  >
+                    Confirmar e Submeter
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </Modal>
@@ -9459,38 +10956,99 @@ service cloud.firestore {
           title="Iniciar Cronômetro Avulso"
         >
           <div className="space-y-4">
-             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-               Inicie um cronômetro para uma tarefa que não está lista em seus prazos oficiais.
-             </p>
-             <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente / Número do Processo</label>
-                <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={manualTimerForm.processTitle} onChange={e => setManualTimerForm({...manualTimerForm, processTitle: e.target.value})} placeholder="Pode ser nome ou CNJ" />
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Breve Descrição do Trabalho</label>
-                   <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={manualTimerForm.peca} onChange={e => setManualTimerForm({...manualTimerForm, peca: e.target.value})} placeholder="Ex: Análise de Documentos" />
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Categoria de Atividade</label>
-                   <select className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={manualTimerForm.activityType} onChange={e => setManualTimerForm({...manualTimerForm, activityType: e.target.value})}>
-                      <option value="Elaboração de Peça">Elaboração de Peça</option>
-                      <option value="Pesquisa Jurídica">Pesquisa Jurídica</option>
-                      <option value="Audiência">Audiência</option>
-                      <option value="Reunião">Reunião</option>
-                      <option value="Análise de Documento">Análise de Documento</option>
-                      <option value="Diligência Externa">Diligência Externa</option>
-                      <option value="Outros">Outros</option>
-                   </select>
-                </div>
-             </div>
-             
-             <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                <button onClick={() => setIsManualTimerModalOpen(false)} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition">Cancelar</button>
-                <button onClick={handleStartManualTimer} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> INICIAR CRONÔMETRO
-                </button>
-             </div>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Inicie um cronômetro para uma tarefa que não está lista em seus
+              prazos oficiais.
+            </p>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                Cliente / Número do Processo
+              </label>
+              <input
+                type="text"
+                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                value={manualTimerForm.processTitle}
+                onChange={(e) =>
+                  setManualTimerForm({
+                    ...manualTimerForm,
+                    processTitle: e.target.value,
+                  })
+                }
+                placeholder="Pode ser nome ou CNJ"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Breve Descrição do Trabalho
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={manualTimerForm.peca}
+                  onChange={(e) =>
+                    setManualTimerForm({
+                      ...manualTimerForm,
+                      peca: e.target.value,
+                    })
+                  }
+                  placeholder="Ex: Análise de Documentos"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Categoria de Atividade
+                </label>
+                <select
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={manualTimerForm.activityType}
+                  onChange={(e) =>
+                    setManualTimerForm({
+                      ...manualTimerForm,
+                      activityType: e.target.value,
+                    })
+                  }
+                >
+                  <option value="Elaboração de Peça">Elaboração de Peça</option>
+                  <option value="Pesquisa Jurídica">Pesquisa Jurídica</option>
+                  <option value="Audiência">Audiência</option>
+                  <option value="Reunião">Reunião</option>
+                  <option value="Análise de Documento">
+                    Análise de Documento
+                  </option>
+                  <option value="Diligência Externa">Diligência Externa</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => setIsManualTimerModalOpen(false)}
+                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleStartManualTimer}
+                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition flex items-center gap-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>{" "}
+                INICIAR CRONÔMETRO
+              </button>
+            </div>
           </div>
         </Modal>
 
@@ -9500,50 +11058,137 @@ service cloud.firestore {
           title="Lançamento Retroativo de Horas"
         >
           <div className="space-y-4">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cliente / Processo</label>
-                   <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.processTitle} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, processTitle: e.target.value})} placeholder="Nome ou Documento" />
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Data da Atividade</label>
-                   <input type="date" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.date} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, date: e.target.value})} />
-                </div>
-             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Cliente / Processo
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={retroactiveLogForm.processTitle}
+                  onChange={(e) =>
+                    setRetroactiveLogForm({
+                      ...retroactiveLogForm,
+                      processTitle: e.target.value,
+                    })
+                  }
+                  placeholder="Nome ou Documento"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Data da Atividade
+                </label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={retroactiveLogForm.date}
+                  onChange={(e) =>
+                    setRetroactiveLogForm({
+                      ...retroactiveLogForm,
+                      date: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-1 col-span-2">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividade Realizada</label>
-                   <input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.peca} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, peca: e.target.value})} placeholder="O que você fez?" />
-                </div>
-                <div className="space-y-1">
-                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Tempo Gasto (Minutos)</label>
-                   <input type="number" min="1" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.durationMinutes} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, durationMinutes: e.target.value})} placeholder="Ex: 120" />
-                </div>
-             </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1 col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Atividade Realizada
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={retroactiveLogForm.peca}
+                  onChange={(e) =>
+                    setRetroactiveLogForm({
+                      ...retroactiveLogForm,
+                      peca: e.target.value,
+                    })
+                  }
+                  placeholder="O que você fez?"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Tempo Gasto (Minutos)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={retroactiveLogForm.durationMinutes}
+                  onChange={(e) =>
+                    setRetroactiveLogForm({
+                      ...retroactiveLogForm,
+                      durationMinutes: e.target.value,
+                    })
+                  }
+                  placeholder="Ex: 120"
+                />
+              </div>
+            </div>
 
-             <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Categoria</label>
-                <select className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.activityType} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, activityType: e.target.value})}>
-                   <option value="Elaboração de Peça">Elaboração de Peça</option>
-                   <option value="Pesquisa Jurídica">Pesquisa Jurídica</option>
-                   <option value="Audiência">Audiência</option>
-                   <option value="Reunião">Reunião</option>
-                   <option value="Análise de Documento">Análise de Documento</option>
-                   <option value="Diligência Externa">Diligência Externa</option>
-                   <option value="Outros">Outros</option>
-                </select>
-             </div>
-             
-             <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Observações (Opcional)</label>
-                <textarea className="w-full bg-slate-50 p-3 min-h-[60px] rounded-xl border border-slate-100 text-sm outline-none focus:ring-4 focus:ring-blue-100" value={retroactiveLogForm.description} onChange={e => setRetroactiveLogForm({...retroactiveLogForm, description: e.target.value})} placeholder="Mais detalhes (Se necessário)..." />
-             </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                Categoria
+              </label>
+              <select
+                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                value={retroactiveLogForm.activityType}
+                onChange={(e) =>
+                  setRetroactiveLogForm({
+                    ...retroactiveLogForm,
+                    activityType: e.target.value,
+                  })
+                }
+              >
+                <option value="Elaboração de Peça">Elaboração de Peça</option>
+                <option value="Pesquisa Jurídica">Pesquisa Jurídica</option>
+                <option value="Audiência">Audiência</option>
+                <option value="Reunião">Reunião</option>
+                <option value="Análise de Documento">
+                  Análise de Documento
+                </option>
+                <option value="Diligência Externa">Diligência Externa</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
 
-             <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                <button onClick={() => setIsRetroactiveLogModalOpen(false)} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition">Cancelar</button>
-                <button onClick={handleSaveRetroactiveTimeLog} className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition">Lançar Horas</button>
-             </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                Observações (Opcional)
+              </label>
+              <textarea
+                className="w-full bg-slate-50 p-3 min-h-[60px] rounded-xl border border-slate-100 text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                value={retroactiveLogForm.description}
+                onChange={(e) =>
+                  setRetroactiveLogForm({
+                    ...retroactiveLogForm,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Mais detalhes (Se necessário)..."
+              />
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => setIsRetroactiveLogModalOpen(false)}
+                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveRetroactiveTimeLog}
+                className="px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition"
+              >
+                Lançar Horas
+              </button>
+            </div>
           </div>
         </Modal>
 
@@ -9637,19 +11282,33 @@ service cloud.firestore {
                                 Categoria
                               </span>
                               <span className="text-xs font-black text-blue-600">
-                                {(selectedAppointment.data as AdminTask).category}
+                                {
+                                  (selectedAppointment.data as AdminTask)
+                                    .category
+                                }
                               </span>
                             </div>
                           </>
                         )}
-                        {(selectedAppointment.data as AdminTask | Deadline).assignedTo && (
+                        {(selectedAppointment.data as AdminTask | Deadline)
+                          .assignedTo && (
                           <div className="flex justify-between items-center py-1.5 border-b border-white">
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                               Atribuído a
                             </span>
                             <span className="text-xs font-black text-blue-600">
-                              {teamProfiles.find(t => t.id === (selectedAppointment.data as AdminTask | Deadline).assignedTo)?.name || 
-                               (selectedAppointment.data.userId === user?.uid ? userProfile?.name || "Eu" : "Outro Usuário")}
+                              {teamProfiles.find(
+                                (t) =>
+                                  t.id ===
+                                  (
+                                    selectedAppointment.data as
+                                      | AdminTask
+                                      | Deadline
+                                  ).assignedTo,
+                              )?.name ||
+                                (selectedAppointment.data.userId === user?.uid
+                                  ? userProfile?.name || "Eu"
+                                  : "Outro Usuário")}
                             </span>
                           </div>
                         )}
@@ -9683,8 +11342,8 @@ service cloud.firestore {
                               Assunto / Descrição
                             </span>
                             <p className="text-[11px] font-medium text-slate-700 leading-relaxed italic whitespace-pre-wrap">
-                              {(selectedAppointment.data as AdminTask).description ||
-                                "Nenhuma descrição fornecida."}
+                              {(selectedAppointment.data as AdminTask)
+                                .description || "Nenhuma descrição fornecida."}
                             </p>
                           </div>
                         )}
@@ -9702,7 +11361,8 @@ service cloud.firestore {
                             rel="noopener noreferrer"
                             className="flex items-center justify-center gap-2 bg-blue-600 text-white p-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-blue-500/10 hover:scale-[1.01] transition-all w-full text-center"
                           >
-                            <Icons.ExternalLink className="w-3.5 h-3.5" /> ACESSAR DOCUMENTO
+                            <Icons.ExternalLink className="w-3.5 h-3.5" />{" "}
+                            ACESSAR DOCUMENTO
                           </a>
                         </div>
                       )}
@@ -9717,67 +11377,221 @@ service cloud.firestore {
                           Cronômetro de Atividade
                         </p>
                         {(() => {
-                           const d = selectedAppointment.data as Deadline;
-                           const activeTimer = activeTimers.find(t => t.deadlineId === d.id);
-                           const isPlaying = activeTimer?.isPlaying || false;
-                           const elapsed = activeTimer?.elapsedSeconds || 0;
-                           // Display dynamic elapsed time if playing
-                           let displayElapsed = elapsed;
-                           if (isPlaying && activeTimer?.lastStartedAt) {
-                              displayElapsed += (Date.now() - activeTimer.lastStartedAt) / 1000;
-                           }
-                           
-                           const hrs = Math.floor(displayElapsed / 3600);
-                           const mins = Math.floor((displayElapsed % 3600) / 60);
-                           const secs = Math.floor(displayElapsed % 60);
-                           const timeString = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+                          const d = selectedAppointment.data as Deadline;
+                          const activeTimer = activeTimers.find(
+                            (t) => t.deadlineId === d.id,
+                          );
+                          const isPlaying = activeTimer?.isPlaying || false;
+                          const elapsed = activeTimer?.elapsedSeconds || 0;
+                          // Display dynamic elapsed time if playing
+                          let displayElapsed = elapsed;
+                          if (isPlaying && activeTimer?.lastStartedAt) {
+                            displayElapsed +=
+                              (Date.now() - activeTimer.lastStartedAt) / 1000;
+                          }
 
-                           return (
-                             <div className="flex flex-col items-center gap-4 py-2">
-                               <div className="flex items-center justify-center gap-3">
-                                 <span className="font-mono text-3xl font-black text-slate-800 tracking-wider">
-                                    {timeString}
-                                 </span>
-                                 {isPlaying && (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-                                      <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Ativo</span>
-                                    </div>
-                                 )}
-                               </div>
-                               
-                               <div className="flex items-center gap-2.5 w-full">
-                                  {!isPlaying ? (
-                                    <button 
-                                      onClick={() => handleStartTimerForDeadline(d)}
-                                      className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
+                          const hrs = Math.floor(displayElapsed / 3600);
+                          const mins = Math.floor((displayElapsed % 3600) / 60);
+                          const secs = Math.floor(displayElapsed % 60);
+                          const timeString = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+                          return (
+                            <div className="flex flex-col items-center gap-4 py-2">
+                              <div className="flex items-center justify-center gap-3">
+                                <span className="font-mono text-3xl font-black text-slate-800 tracking-wider">
+                                  {timeString}
+                                </span>
+                                {isPlaying && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
+                                      Ativo
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2.5 w-full">
+                                {!isPlaying ? (
+                                  <button
+                                    onClick={() =>
+                                      handleStartTimerForDeadline(d)
+                                    }
+                                    className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
                                     >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                      INICIAR
-                                    </button>
-                                  ) : (
-                                    <button 
-                                      onClick={() => handlePauseTimer(d.id)}
-                                      className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/10 hover:bg-amber-600 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>
-                                      PAUSAR
-                                    </button>
-                                  )}
-                                  <button 
-                                    onClick={() => {
-                                      handleStopTimer(d.id);
-                                      setIsDetailsModalOpen(false);
-                                    }}
-                                    disabled={!activeTimer}
-                                    className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl transition font-black text-[9px] uppercase tracking-widest ${activeTimer ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:scale-[1.01]" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
-                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
-                                    PARAR
+                                      <polygon points="5 3 19 12 5 21 5 3" />
+                                    </svg>
+                                    INICIAR
                                   </button>
-                               </div>
-                             </div>
-                           );
+                                ) : (
+                                  <button
+                                    onClick={() => handlePauseTimer(d.id)}
+                                    className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/10 hover:bg-amber-600 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest"
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <rect width="4" height="16" x="6" y="4" />
+                                      <rect
+                                        width="4"
+                                        height="16"
+                                        x="14"
+                                        y="4"
+                                      />
+                                    </svg>
+                                    PAUSAR
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    handleStopTimer(d.id);
+                                    setIsDetailsModalOpen(false);
+                                  }}
+                                  disabled={!activeTimer}
+                                  className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl transition font-black text-[9px] uppercase tracking-widest ${activeTimer ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:scale-[1.01]" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <rect
+                                      width="18"
+                                      height="18"
+                                      x="3"
+                                      y="3"
+                                      rx="2"
+                                      ry="2"
+                                    />
+                                  </svg>
+                                  PARAR
+                                </button>
+                              </div>
+
+                              {timerStartError && (
+                                <div className="mt-2 p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 flex items-start gap-2">
+                                  <span className="shrink-0 text-sm">⚠</span>
+                                  <p className="text-[10px] font-bold leading-tight">
+                                    {timerStartError}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* REGISTRO MANUAL DE TEMPO */}
+                              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 flex flex-col gap-2">
+                                <button
+                                  onClick={() =>
+                                    setIsManualInputInDetailsOpen(
+                                      !isManualInputInDetailsOpen,
+                                    )
+                                  }
+                                  type="button"
+                                  className="flex items-center justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition"
+                                >
+                                  <span>ESQUECEU DE INICIAR O CRONÔMETRO?</span>
+                                  {isManualInputInDetailsOpen && (
+                                    <span className="text-blue-600 font-extrabold flex items-center gap-1">
+                                      Fechar
+                                    </span>
+                                  )}
+                                </button>
+
+                                {isManualInputInDetailsOpen && (
+                                  <div className="space-y-3 pt-1 w-full text-left">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1 col-span-1">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-0.5 text-left">
+                                          Horas
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="0"
+                                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-blue-100 text-center text-slate-800 animate-none"
+                                          value={manualTimerHours}
+                                          onChange={(e) =>
+                                            setManualTimerHours(e.target.value)
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-1 col-span-1">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-0.5 text-left">
+                                          Minutos
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="59"
+                                          placeholder="15"
+                                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-blue-100 text-center text-slate-800 animate-none"
+                                          value={manualTimerMinutes}
+                                          onChange={(e) =>
+                                            setManualTimerMinutes(
+                                              e.target.value,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        const h =
+                                          parseInt(manualTimerHours) || 0;
+                                        const m =
+                                          parseInt(manualTimerMinutes) || 0;
+                                        if (h <= 0 && m <= 0) {
+                                          alert(
+                                            "Por favor, selecione uma duração superior a 0 minutos.",
+                                          );
+                                          return;
+                                        }
+                                        const totalSeconds = h * 3600 + m * 60;
+                                        handleLogManualTimeForDeadline(
+                                          d,
+                                          totalSeconds,
+                                        );
+
+                                        // Reset manual inputs and close
+                                        setManualTimerHours("");
+                                        setManualTimerMinutes("");
+                                        setIsManualInputInDetailsOpen(false);
+                                        setIsDetailsModalOpen(false);
+                                      }}
+                                      type="button"
+                                      className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 text-white hover:bg-slate-900 transition font-black text-[9px] uppercase tracking-widest shadow-lg shadow-slate-800/10 cursor-pointer"
+                                    >
+                                      LANÇAR TEMPO MANUAL
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
                         })()}
                       </div>
                     </div>
@@ -9797,212 +11611,342 @@ service cloud.firestore {
 
               {selectedAppointment.type === "deadline" && (
                 <div className="pt-4 border-t border-slate-100">
-                   <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
-                      <div>
-                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                            Histórico de Atividades & Revisões
-                         </p>
-                         <div className="space-y-3 overflow-y-auto max-h-[190px] pr-1 scrollbar-thin">
-                            {!(selectedAppointment.data as Deadline).reviewLogs || (selectedAppointment.data as Deadline).reviewLogs!.length === 0 ? (
-                               <p className="text-xs font-medium text-slate-400 py-1 italic">Nenhum evento registrado no histórico.</p>
-                            ) : (
-                               compileReviewLogs((selectedAppointment.data as Deadline).reviewLogs || []).map((log, idx) => (
-                                  <div key={idx} className="flex flex-col gap-1 border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
-                                     <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-1.5">
-                                           <span className="text-xs font-black text-slate-800">{log.userName}</span>
-                                           <span className="text-[8px] font-extrabold uppercase text-white bg-slate-800 px-1.5 py-0.5 rounded">{log.userRole || 'ADVOGADO'}</span>
-                                        </div>
-                                        <span className="text-[9px] font-bold text-slate-400">{new Date(log.timestamp).toLocaleString("pt-BR")}</span>
-                                     </div>
-                                     
-                                     <div className="flex items-center gap-2 mt-0.5">
-                                        {log.action === 'TIMER_SESSION' && <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Sessão Registrada</span>}
-                                        {log.action === 'SUBMITTED_FOR_REVIEW' && <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">Enviado p/ Revisão</span>}
-                                        {log.action === 'RETURNED' && <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Devolvido</span>}
-                                        {log.action === 'SENT_TO_ADMIN' && <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Remetido Validação</span>}
-                                        {log.action === 'ADMIN_APPROVED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Aprovado pelo Admin</span>}
-                                        {log.action === 'COMPLETED' && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Concluído Definitivo</span>}
-                                        {log.action === 'CREATE' && <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 bg-teal-100 px-2 py-0.5 rounded-full">Cadastro</span>}
-                                        {log.action === 'EDIT' && <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">Alteração</span>}
-                                        {log.action === 'ANNOTATION' && <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">Anotação</span>}
-                                        
-                                        {typeof log.durationSeconds !== 'undefined' && log.durationSeconds > 0 && (
-                                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                              <Icons.Clock className="w-2.5 h-2.5 inline mr-1" />
-                                              {Math.floor(log.durationSeconds / 3600).toString().padStart(2, "0")}:{Math.floor((log.durationSeconds % 3600) / 60).toString().padStart(2, "0")}:{Math.floor(log.durationSeconds % 60).toString().padStart(2, "0")}
-                                           </span>
-                                        )}
-                                     </div>
-                                     
-                                     {log.observation && (
-                                        <p className="text-[11px] font-medium text-slate-600 italic bg-white p-2 rounded-xl border border-slate-100 mt-1 whitespace-pre-wrap">
-                                           {log.observation}
-                                        </p>
-                                     )}
-                                  </div>
-                               ))
-                            )}
-                         </div>
-                      </div>
-
-                      {/* Nova Anotação Form */}
-                      <div className="mt-4 pt-3 border-t border-slate-200/60 font-sans">
-                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
-                            Nova Anotação
-                         </label>
-                         <div className="flex flex-col sm:flex-row gap-2">
-                            <textarea
-                               value={newAnnotationText}
-                               onChange={(e) => setNewAnnotationText(e.target.value)}
-                               placeholder="Nova anotação..."
-                               rows={1}
-                               className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none focus:ring-4 focus:ring-blue-100 placeholder-slate-400 font-medium resize-none transition animate-none"
-                            />
-                            <button
-                               onClick={() => handleAddAnnotation((selectedAppointment.data as Deadline).id)}
-                               disabled={!newAnnotationText.trim() || isAddingAnnotation}
-                               className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/15 hover:bg-purple-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none transition flex items-center justify-center self-end"
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                        Histórico de Atividades & Revisões
+                      </p>
+                      <div className="space-y-3 overflow-y-auto max-h-[190px] pr-1 scrollbar-thin">
+                        {!(selectedAppointment.data as Deadline).reviewLogs ||
+                        (selectedAppointment.data as Deadline).reviewLogs!
+                          .length === 0 ? (
+                          <p className="text-xs font-medium text-slate-400 py-1 italic">
+                            Nenhum evento registrado no histórico.
+                          </p>
+                        ) : (
+                          compileReviewLogs(
+                            (selectedAppointment.data as Deadline).reviewLogs ||
+                              [],
+                          ).map((log, idx) => (
+                            <div
+                              key={idx}
+                              className="flex flex-col gap-1 border-b border-slate-200/50 pb-3 last:border-0 last:pb-0"
                             >
-                               {isAddingAnnotation ? "..." : "Salvar"}
-                            </button>
-                         </div>
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-black text-slate-800">
+                                    {log.userName}
+                                  </span>
+                                  <span className="text-[8px] font-extrabold uppercase text-white bg-slate-800 px-1.5 py-0.5 rounded">
+                                    {log.userRole || "ADVOGADO"}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  {new Date(log.timestamp).toLocaleString(
+                                    "pt-BR",
+                                  )}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {log.action === "TIMER_SESSION" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                                    Sessão Registrada
+                                  </span>
+                                )}
+                                {log.action === "SUBMITTED_FOR_REVIEW" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">
+                                    Enviado p/ Revisão
+                                  </span>
+                                )}
+                                {log.action === "RETURNED" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                    Devolvido
+                                  </span>
+                                )}
+                                {log.action === "SENT_TO_ADMIN" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                                    Remetido Validação
+                                  </span>
+                                )}
+                                {log.action === "ADMIN_APPROVED" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                    Aprovado pelo Admin
+                                  </span>
+                                )}
+                                {log.action === "COMPLETED" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                    Concluído Definitivo
+                                  </span>
+                                )}
+                                {log.action === "CREATE" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 bg-teal-100 px-2 py-0.5 rounded-full">
+                                    Cadastro
+                                  </span>
+                                )}
+                                {log.action === "EDIT" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
+                                    Alteração
+                                  </span>
+                                )}
+                                {log.action === "ANNOTATION" && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
+                                    Anotação
+                                  </span>
+                                )}
+
+                                {typeof log.durationSeconds !== "undefined" &&
+                                  log.durationSeconds > 0 && (
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                      <Icons.Clock className="w-2.5 h-2.5 inline mr-1" />
+                                      {Math.floor(log.durationSeconds / 3600)
+                                        .toString()
+                                        .padStart(2, "0")}
+                                      :
+                                      {Math.floor(
+                                        (log.durationSeconds % 3600) / 60,
+                                      )
+                                        .toString()
+                                        .padStart(2, "0")}
+                                      :
+                                      {Math.floor(log.durationSeconds % 60)
+                                        .toString()
+                                        .padStart(2, "0")}
+                                    </span>
+                                  )}
+                              </div>
+
+                              {log.observation && (
+                                <p className="text-[11px] font-medium text-slate-600 italic bg-white p-2 rounded-xl border border-slate-100 mt-1 whitespace-pre-wrap">
+                                  {log.observation}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
-                   </div>
+                    </div>
+
+                    {/* Nova Anotação Form */}
+                    <div className="mt-4 pt-3 border-t border-slate-200/60 font-sans">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                        Nova Anotação
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <textarea
+                          value={newAnnotationText}
+                          onChange={(e) => setNewAnnotationText(e.target.value)}
+                          placeholder="Nova anotação..."
+                          rows={1}
+                          className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs outline-none focus:ring-4 focus:ring-blue-100 placeholder-slate-400 font-medium resize-none transition animate-none"
+                        />
+                        <button
+                          onClick={() =>
+                            handleAddAnnotation(
+                              (selectedAppointment.data as Deadline).id,
+                            )
+                          }
+                          disabled={
+                            !newAnnotationText.trim() || isAddingAnnotation
+                          }
+                          className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/15 hover:bg-purple-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none transition flex items-center justify-center self-end"
+                        >
+                          {isAddingAnnotation ? "..." : "Salvar"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {(() => {
-                 const isDeadline = selectedAppointment.type === "deadline";
-                 if (isDeadline && userProfile) {
-                    const d = selectedAppointment.data as Deadline;
-                    const inCoordReview = d.reviewState === ReviewState.WAITING_COORDINATOR || d.reviewState === ReviewState.REVIEWING_COORDINATOR || d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
-                    const inAdminReview = d.reviewState === ReviewState.WAITING_ADMIN || d.reviewState === ReviewState.REVIEWING_ADMIN;
-                    const activeTimer = activeTimers.find(t => t.deadlineId === d.id);
-                    
-                    if (!activeTimer && ((userProfile.role === UserRole.COORDINATOR && inCoordReview) || (userProfile.role === UserRole.ADMIN && inAdminReview))) {
-                       return (
-                          <div className="space-y-1.5 bg-slate-50 border border-slate-100 p-3.5 rounded-2xl mb-4 w-full">
-                             <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex justify-between">
-                               <span>Justificativa / Observação de Revisão</span>
-                               <span className="text-red-500 font-bold">* Obrigatório para devolver</span>
-                             </label>
-                             <textarea
-                                className={`w-full bg-white p-3 min-h-[60px] rounded-xl border text-sm outline-none focus:ring-4 focus:ring-blue-100 placeholder-slate-400 font-medium ${detailsReviewError ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200'}`}
-                                value={detailsReviewObservation}
-                                onChange={e => {
-                                   setDetailsReviewObservation(e.target.value);
-                                   setDetailsReviewError("");
-                                }}
-                                placeholder="Descreva aqui o motivo para devolver ou observações para o histórico..."
-                             />
-                             {detailsReviewError && (
-                                <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
-                                   <span>⚠</span> {detailsReviewError}
-                                </p>
-                             )}
-                          </div>
-                       );
-                    }
-                 }
-                 return null;
+                const isDeadline = selectedAppointment.type === "deadline";
+                if (isDeadline && userProfile) {
+                  const d = selectedAppointment.data as Deadline;
+                  const inCoordReview =
+                    d.reviewState === ReviewState.WAITING_COORDINATOR ||
+                    d.reviewState === ReviewState.REVIEWING_COORDINATOR ||
+                    d.reviewState ===
+                      ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+                  const inAdminReview =
+                    d.reviewState === ReviewState.WAITING_ADMIN ||
+                    d.reviewState === ReviewState.REVIEWING_ADMIN;
+                  const activeTimer = activeTimers.find(
+                    (t) => t.deadlineId === d.id,
+                  );
+
+                  if (
+                    !activeTimer &&
+                    ((userProfile.role === UserRole.COORDINATOR &&
+                      inCoordReview) ||
+                      (userProfile.role === UserRole.ADMIN && inAdminReview))
+                  ) {
+                    return (
+                      <div className="space-y-1.5 bg-slate-50 border border-slate-100 p-3.5 rounded-2xl mb-4 w-full">
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex justify-between">
+                          <span>Justificativa / Observação de Revisão</span>
+                          <span className="text-red-500 font-bold">
+                            * Obrigatório para devolver
+                          </span>
+                        </label>
+                        <textarea
+                          className={`w-full bg-white p-3 min-h-[60px] rounded-xl border text-sm outline-none focus:ring-4 focus:ring-blue-100 placeholder-slate-400 font-medium ${detailsReviewError ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
+                          value={detailsReviewObservation}
+                          onChange={(e) => {
+                            setDetailsReviewObservation(e.target.value);
+                            setDetailsReviewError("");
+                          }}
+                          placeholder="Descreva aqui o motivo para devolver ou observações para o histórico..."
+                        />
+                        {detailsReviewError && (
+                          <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                            <span>⚠</span> {detailsReviewError}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+                }
+                return null;
               })()}
 
               <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row flex-wrap gap-3">
-                 {(() => {
-                    const isDeadline = selectedAppointment.type === "deadline";
-                    const d = selectedAppointment.data as Deadline;
-                    
-                    if (isDeadline && userProfile) {
-                       const inCoordReview = d.reviewState === ReviewState.WAITING_COORDINATOR || d.reviewState === ReviewState.REVIEWING_COORDINATOR || d.reviewState === ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
-                       const inAdminReview = d.reviewState === ReviewState.WAITING_ADMIN || d.reviewState === ReviewState.REVIEWING_ADMIN;
-                       
-                       const activeTimer = activeTimers.find(t => t.deadlineId === d.id);
-                       
-                       if (!activeTimer) {
-                          if (userProfile.role === UserRole.COORDINATOR && inCoordReview) {
-                             return (
-                               <>
-                                 <button onClick={() => {
-                                    handleDirectReviewAction(d, 'RETURN');
-                                 }} className="flex-1 flex items-center justify-center gap-2.5 bg-red-100 text-red-600 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 transition-all shadow-sm">
-                                   DEVOLVER
-                                 </button>
-                                 <button onClick={() => {
-                                    handleDirectReviewAction(d, 'FORWARD');
-                                 }} className="flex-1 flex items-center justify-center gap-2.5 bg-amber-500 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-amber-600 transition-all shadow-sm">
-                                   REMETER VALIDAÇÃO
-                                 </button>
-                                 <button onClick={() => {
-                                    handleDirectReviewAction(d, 'COMPLETE');
-                                 }} className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm">
-                                   ENCERRAR
-                                 </button>
-                               </>
-                             );
-                          }
-                          
-                          if (userProfile.role === UserRole.ADMIN && inAdminReview) {
-                             return (
-                               <>
-                                 <button onClick={() => {
-                                     handleDirectReviewAction(d, 'RETURN');
-                                 }} className="flex-1 flex items-center justify-center gap-2.5 bg-red-100 text-red-600 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 transition-all shadow-sm">
-                                   DEVOLVER
-                                 </button>
-                                 <button onClick={() => {
-                                     handleDirectReviewAction(d, 'COMPLETE');
-                                 }} className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm">
-                                   CONCLUIR VALIDAÇÃO
-                                 </button>
-                               </>
-                             )
-                          }
-                       }
-                    }
+                {(() => {
+                  const isDeadline = selectedAppointment.type === "deadline";
+                  const d = selectedAppointment.data as Deadline;
 
-                    return (
-                       <>
+                  if (isDeadline && userProfile) {
+                    const inCoordReview =
+                      d.reviewState === ReviewState.WAITING_COORDINATOR ||
+                      d.reviewState === ReviewState.REVIEWING_COORDINATOR ||
+                      d.reviewState ===
+                        ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+                    const inAdminReview =
+                      d.reviewState === ReviewState.WAITING_ADMIN ||
+                      d.reviewState === ReviewState.REVIEWING_ADMIN;
+
+                    const activeTimer = activeTimers.find(
+                      (t) => t.deadlineId === d.id,
+                    );
+
+                    if (!activeTimer) {
+                      if (
+                        userProfile.role === UserRole.COORDINATOR &&
+                        inCoordReview
+                      ) {
+                        return (
+                          <>
+                            <button
+                              onClick={() => {
+                                handleDirectReviewAction(d, "RETURN");
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2.5 bg-red-100 text-red-600 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 transition-all shadow-sm"
+                            >
+                              DEVOLVER
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDirectReviewAction(d, "FORWARD");
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2.5 bg-amber-500 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-amber-600 transition-all shadow-sm"
+                            >
+                              REMETER VALIDAÇÃO
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDirectReviewAction(d, "COMPLETE");
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm"
+                            >
+                              ENCERRAR
+                            </button>
+                          </>
+                        );
+                      }
+
+                      if (
+                        userProfile.role === UserRole.ADMIN &&
+                        inAdminReview
+                      ) {
+                        return (
+                          <>
+                            <button
+                              onClick={() => {
+                                handleDirectReviewAction(d, "RETURN");
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2.5 bg-red-100 text-red-600 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 transition-all shadow-sm"
+                            >
+                              DEVOLVER
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDirectReviewAction(d, "COMPLETE");
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm"
+                            >
+                              CONCLUIR VALIDAÇÃO
+                            </button>
+                          </>
+                        );
+                      }
+                    }
+                  }
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (isDeadline)
+                            handleEditClick(
+                              selectedAppointment.data as Deadline,
+                            );
+                          else
+                            handleEditAdminTaskClick(
+                              selectedAppointment.data as AdminTask,
+                            );
+                          setIsDetailsModalOpen(false);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2.5 bg-slate-900 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-sm"
+                      >
+                        <Icons.Edit className="w-4 h-4" /> EDITAR
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (isDeadline)
+                            deleteDeadline(
+                              (selectedAppointment.data as Deadline).id,
+                            );
+                          else
+                            deleteAdminTask(
+                              (selectedAppointment.data as AdminTask).id,
+                            );
+                          setIsDetailsModalOpen(false);
+                          setSelectedAppointment(null);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2.5 bg-white text-red-600 border border-red-100 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                      >
+                        <Icons.Trash className="w-4 h-4" /> EXCLUIR
+                      </button>
+                      {isDeadline &&
+                        userProfile?.role === UserRole.ADMIN &&
+                        (selectedAppointment.data as Deadline).status !==
+                          DeadlineStatus.COMPLETED && (
                           <button
                             onClick={() => {
-                              if (isDeadline)
-                                handleEditClick(selectedAppointment.data as Deadline);
-                              else
-                                handleEditAdminTaskClick(
-                                  selectedAppointment.data as AdminTask,
-                                );
-                              setIsDetailsModalOpen(false);
+                              handleDirectReviewAction(
+                                selectedAppointment.data as Deadline,
+                                "COMPLETE",
+                              );
                             }}
-                            className="flex-1 flex items-center justify-center gap-2.5 bg-slate-900 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-sm"
+                            className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm"
                           >
-                            <Icons.Edit className="w-4 h-4" /> EDITAR
+                            CONCLUIR PRAZO
                           </button>
-                          <button
-                            onClick={() => {
-                              if (isDeadline)
-                                deleteDeadline((selectedAppointment.data as Deadline).id);
-                              else
-                                deleteAdminTask(
-                                  (selectedAppointment.data as AdminTask).id,
-                                );
-                              setIsDetailsModalOpen(false);
-                              setSelectedAppointment(null);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-2.5 bg-white text-red-600 border border-red-100 p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                          >
-                            <Icons.Trash className="w-4 h-4" /> EXCLUIR
-                          </button>
-                          {isDeadline && userProfile?.role === UserRole.ADMIN && (selectedAppointment.data as Deadline).status !== DeadlineStatus.COMPLETED && (
-                              <button onClick={() => {
-                                  handleDirectReviewAction(selectedAppointment.data as Deadline, 'COMPLETE');
-                              }} className="flex-1 flex items-center justify-center gap-2.5 bg-emerald-600 text-white p-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm">
-                                CONCLUIR PRAZO
-                              </button>
-                          )}
-                       </>
-                    )
-                 })()}
-                
+                        )}
+                    </>
+                  );
+                })()}
+
                 <button
                   onClick={() => {
                     setIsDetailsModalOpen(false);
@@ -10073,7 +12017,9 @@ service cloud.firestore {
 
               <button
                 onClick={handleAddProcess}
-                disabled={isSyncing || isFetchingDatajud || !newProcess.number.trim()}
+                disabled={
+                  isSyncing || isFetchingDatajud || !newProcess.number.trim()
+                }
                 className="w-full bg-blue-600 text-white p-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/10 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSyncing ? "SALVANDO..." : "CADASTRAR PROCESSO"}
@@ -10227,7 +12173,8 @@ service cloud.firestore {
                     }))
                   }
                 >
-                  {(dynamicSettings.categoriasTarefas && dynamicSettings.categoriasTarefas.length > 0
+                  {(dynamicSettings.categoriasTarefas &&
+                  dynamicSettings.categoriasTarefas.length > 0
                     ? dynamicSettings.categoriasTarefas
                     : Object.values(AdminTaskCategory)
                   ).map((cat) => (
@@ -10297,7 +12244,8 @@ service cloud.firestore {
                   }
                 />
               </div>
-              {(userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR) && (
+              {(userProfile?.role === UserRole.ADMIN ||
+                userProfile?.role === UserRole.COORDINATOR) && (
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
                     Setor
@@ -10306,18 +12254,24 @@ service cloud.firestore {
                     className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm border border-slate-100 focus:ring-4 focus:ring-blue-100 outline-none"
                     value={newAdminTask.sector || ""}
                     onChange={(e) =>
-                      setNewAdminTask((p) => ({ ...p, sector: e.target.value as Sector }))
+                      setNewAdminTask((p) => ({
+                        ...p,
+                        sector: e.target.value as Sector,
+                      }))
                     }
                   >
                     {Object.values(Sector).map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
                     ))}
                   </select>
                 </div>
               )}
             </div>
 
-            {(userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR) && (
+            {(userProfile?.role === UserRole.ADMIN ||
+              userProfile?.role === UserRole.COORDINATOR) && (
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
                   Responsável pela Tarefa
@@ -10326,17 +12280,23 @@ service cloud.firestore {
                   className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm focus:ring-4 focus:ring-blue-100 outline-none"
                   value={newAdminTask.assignedTo || ""}
                   onChange={(e) =>
-                    setNewAdminTask((p) => ({ ...p, assignedTo: e.target.value }))
+                    setNewAdminTask((p) => ({
+                      ...p,
+                      assignedTo: e.target.value,
+                    }))
                   }
                 >
                   <option value="">
-                    {userProfile ? `${userProfile.name || 'Sem Nome'} (${userProfile.role} - ${userProfile.sector}) (Eu)` : "Eu (Eu)"}
+                    {userProfile
+                      ? `${userProfile.name || "Sem Nome"} (${userProfile.role} - ${userProfile.sector}) (Eu)`
+                      : "Eu (Eu)"}
                   </option>
                   {teamProfiles
                     .filter((m) => m.id !== user?.uid)
                     .map((member) => (
                       <option key={member.id} value={member.id}>
-                        {member.name || "Sem Nome"} ({member.role} - {member.sector})
+                        {member.name || "Sem Nome"} ({member.role} -{" "}
+                        {member.sector})
                       </option>
                     ))}
                 </select>
@@ -10347,14 +12307,23 @@ service cloud.firestore {
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Tarefa Recorrente</h4>
-                    <p className="text-[10px] text-slate-400">Repetir esta tarefa automaticamente</p>
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                      Tarefa Recorrente
+                    </h4>
+                    <p className="text-[10px] text-slate-400">
+                      Repetir esta tarefa automaticamente
+                    </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={Boolean(newAdminTask.isRecurring)}
-                      onChange={(e) => setNewAdminTask(p => ({ ...p, isRecurring: e.target.checked }))}
+                      onChange={(e) =>
+                        setNewAdminTask((p) => ({
+                          ...p,
+                          isRecurring: e.target.checked,
+                        }))
+                      }
                       className="sr-only peer"
                     />
                     <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -10370,7 +12339,12 @@ service cloud.firestore {
                       <select
                         className="w-full bg-white p-2.5 rounded-lg font-bold text-xs border border-slate-100 focus:ring-4 focus:ring-blue-100 outline-none"
                         value={newAdminTask.recurrenceType || "DAILY"}
-                        onChange={(e) => setNewAdminTask(p => ({ ...p, recurrenceType: e.target.value as any }))}
+                        onChange={(e) =>
+                          setNewAdminTask((p) => ({
+                            ...p,
+                            recurrenceType: e.target.value as any,
+                          }))
+                        }
                       >
                         <option value="DAILY">Diariamente</option>
                         <option value="WEEKLY">Semanalmente</option>
@@ -10388,7 +12362,12 @@ service cloud.firestore {
                         min={newAdminTask.date || ""}
                         className="w-full bg-white p-2.5 rounded-lg font-bold text-xs border border-slate-100 focus:ring-4 focus:ring-blue-100 outline-none"
                         value={newAdminTask.recurrenceEndDate || ""}
-                        onChange={(e) => setNewAdminTask(p => ({ ...p, recurrenceEndDate: e.target.value }))}
+                        onChange={(e) =>
+                          setNewAdminTask((p) => ({
+                            ...p,
+                            recurrenceEndDate: e.target.value,
+                          }))
+                        }
                       />
                     </div>
                   </div>
@@ -10560,7 +12539,8 @@ service cloud.firestore {
                         rel="noopener noreferrer"
                         className="flex items-center gap-1.5 text-blue-600 font-bold text-[11px] hover:underline mt-0.5"
                       >
-                        <Icons.ExternalLink className="w-3.5 h-3.5" /> ACESSAR PASTA
+                        <Icons.ExternalLink className="w-3.5 h-3.5" /> ACESSAR
+                        PASTA
                       </a>
                     </div>
                   )}
@@ -10597,11 +12577,14 @@ service cloud.firestore {
                               {proc.cnj || (proc as any).number}
                             </p>
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              {proc.classe || (proc as any).title || "Sem Título"}
+                              {proc.classe ||
+                                (proc as any).title ||
+                                "Sem Título"}
                             </p>
                           </div>
                           <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">
-                            CAD: {new Date(proc.createdAt).toLocaleDateString(
+                            CAD:{" "}
+                            {new Date(proc.createdAt).toLocaleDateString(
                               "pt-BR",
                             )}
                           </span>
@@ -11053,7 +13036,8 @@ service cloud.firestore {
                 placeholder="Ex: TJSP, STJ, Receita Federal..."
               />
             </div>
-            {(userProfile?.role === UserRole.ADMIN || userProfile?.role === UserRole.COORDINATOR) && (
+            {(userProfile?.role === UserRole.ADMIN ||
+              userProfile?.role === UserRole.COORDINATOR) && (
               <>
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase ml-1.5 tracking-widest">
@@ -11063,11 +13047,16 @@ service cloud.firestore {
                     className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm focus:ring-4 focus:ring-blue-100 outline-none"
                     value={newDeadline.sector || ""}
                     onChange={(e) =>
-                      setNewDeadline((p) => ({ ...p, sector: e.target.value as Sector }))
+                      setNewDeadline((p) => ({
+                        ...p,
+                        sector: e.target.value as Sector,
+                      }))
                     }
                   >
                     {Object.values(Sector).map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -11079,17 +13068,23 @@ service cloud.firestore {
                     className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm focus:ring-4 focus:ring-blue-100 outline-none"
                     value={newDeadline.assignedTo || ""}
                     onChange={(e) =>
-                      setNewDeadline((p) => ({ ...p, assignedTo: e.target.value }))
+                      setNewDeadline((p) => ({
+                        ...p,
+                        assignedTo: e.target.value,
+                      }))
                     }
                   >
                     <option value="">
-                      {userProfile ? `${userProfile.name || 'Sem Nome'} (${userProfile.role} - ${userProfile.sector}) (Eu)` : "Eu (Eu)"}
+                      {userProfile
+                        ? `${userProfile.name || "Sem Nome"} (${userProfile.role} - ${userProfile.sector}) (Eu)`
+                        : "Eu (Eu)"}
                     </option>
                     {teamProfiles
                       .filter((m) => m.id !== user?.uid)
                       .map((member) => (
                         <option key={member.id} value={member.id}>
-                          {member.name || "Sem Nome"} ({member.role} - {member.sector})
+                          {member.name || "Sem Nome"} ({member.role} -{" "}
+                          {member.sector})
                         </option>
                       ))}
                   </select>
@@ -11134,7 +13129,8 @@ service cloud.firestore {
                   }}
                   className="text-[8px] font-black uppercase px-3 md:px-4 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                 >
-                  <Icons.Sparkles className="w-3 h-3" /> {isSuggesting ? "..." : "Sugestão IA"}
+                  <Icons.Sparkles className="w-3 h-3" />{" "}
+                  {isSuggesting ? "..." : "Sugestão IA"}
                 </button>
               </div>
               <textarea
@@ -11282,9 +13278,7 @@ service cloud.firestore {
               onClick={handleSaveRule}
               className="w-full bg-slate-900 text-white p-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl active:scale-95"
             >
-              {editingRuleIndex !== null
-                ? "Atualizar Regra"
-                : "Ativar Regra"}
+              {editingRuleIndex !== null ? "Atualizar Regra" : "Ativar Regra"}
             </button>
           </div>
         </Modal>
@@ -11295,7 +13289,9 @@ service cloud.firestore {
         >
           <div className="space-y-3.5">
             <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-              Insira o e-mail do profissional que deseja convidar. Se ele já possuir uma conta no LexPremium, o escritório aparecerá automaticamente no seletor dele no próximo acesso.
+              Insira o e-mail do profissional que deseja convidar. Se ele já
+              possuir uma conta no LexPremium, o escritório aparecerá
+              automaticamente no seletor dele no próximo acesso.
             </p>
             <div className="space-y-2">
               <div className="space-y-1">
@@ -11315,7 +13311,7 @@ service cloud.firestore {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     Cargo
                   </label>
-                   <select
+                  <select
                     className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
                     value={newUserRole}
                     onChange={(e) => setNewUserRole(e.target.value as UserRole)}
@@ -11339,7 +13335,7 @@ service cloud.firestore {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     Setor Inicial
                   </label>
-                   <select
+                  <select
                     className="w-full bg-slate-50 p-3 rounded-xl font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
                     value={newUserSector}
                     onChange={(e) => setNewUserSector(e.target.value as Sector)}
@@ -11381,7 +13377,8 @@ service cloud.firestore {
         >
           <div className="space-y-4">
             <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-              Selecione o prazo cadastrado que ficará vinculado a esta numeração para controle e auditoria posterior.
+              Selecione o prazo cadastrado que ficará vinculado a esta numeração
+              para controle e auditoria posterior.
             </p>
 
             <div className="relative">
@@ -11417,11 +13414,13 @@ service cloud.firestore {
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider font-mono">
                             {d.empresa}
                           </span>
-                          <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-bold uppercase ${
-                            d.status === DeadlineStatus.COMPLETED
-                              ? "bg-emerald-50 text-emerald-600"
-                              : "bg-amber-50 text-amber-600"
-                          }`}>
+                          <span
+                            className={`text-[8px] px-1.5 py-0.5 rounded-md font-bold uppercase ${
+                              d.status === DeadlineStatus.COMPLETED
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-amber-50 text-amber-600"
+                            }`}
+                          >
                             {d.status}
                           </span>
                         </div>
@@ -11432,13 +13431,13 @@ service cloud.firestore {
                           {d.assunto || "Sem assunto"} • Resp: {d.responsavel}
                         </p>
                       </div>
-                      
+
                       <div className="text-right shrink-0">
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">
                           Vencimento
                         </span>
                         <span className="text-xs font-bold text-slate-700 font-mono">
-                          {d.data.split('-').reverse().join('/')}
+                          {d.data.split("-").reverse().join("/")}
                         </span>
                       </div>
                     </button>
@@ -11469,7 +13468,7 @@ service cloud.firestore {
                     handleSaveCorrespondenceLink(
                       linkingNumber.num,
                       linkingNumber.category,
-                      selectedDeadlineForLink
+                      selectedDeadlineForLink,
                     );
                   }
                 }}
@@ -11485,48 +13484,132 @@ service cloud.firestore {
           </div>
         </Modal>
         {/* FLOATING ACTIVE TIMERS WIDGET (TICKER) */}
-        {activeTimers.length > 0 && typeof ticker !== 'undefined' && (
+        {activeTimers.length > 0 && typeof ticker !== "undefined" && (
           <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 items-end animate-in slide-in-from-bottom-5">
-             {activeTimers.map(t => {
-                let displayElapsed = t.elapsedSeconds;
-                if (t.isPlaying && t.lastStartedAt) {
-                  displayElapsed += (Date.now() - t.lastStartedAt) / 1000;
-                }
-                const hrs = Math.floor(displayElapsed / 3600).toString().padStart(2, "0");
-                const mins = Math.floor((displayElapsed % 3600) / 60).toString().padStart(2, "0");
-                const secs = Math.floor(displayElapsed % 60).toString().padStart(2, "0");
+            {activeTimers.map((t) => {
+              let displayElapsed = t.elapsedSeconds;
+              if (t.isPlaying && t.lastStartedAt) {
+                displayElapsed += (Date.now() - t.lastStartedAt) / 1000;
+              }
+              const hrs = Math.floor(displayElapsed / 3600)
+                .toString()
+                .padStart(2, "0");
+              const mins = Math.floor((displayElapsed % 3600) / 60)
+                .toString()
+                .padStart(2, "0");
+              const secs = Math.floor(displayElapsed % 60)
+                .toString()
+                .padStart(2, "0");
 
-                return (
-                  <div key={t.deadlineId} className="bg-slate-900 border border-slate-700 shadow-2xl shadow-blue-900/20 rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 hover:scale-[1.02] transition">
-                     <div className="flex flex-col">
-                       <div className="flex items-center gap-2 mb-0.5">
-                         {t.isPlaying && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
-                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t.empresa}</span>
-                       </div>
-                       <span className="text-xs font-bold text-white max-w-[200px] truncate" title={t.peca}>{t.peca}</span>
-                     </div>
-                     <div className="font-mono text-lg font-black tracking-wider text-blue-400 bg-slate-950 px-3 py-1 rounded-xl border border-slate-800">
-                       {hrs}:{mins}:{secs}
-                     </div>
-                     <div className="flex items-center gap-1.5 sm:border-l border-slate-700 sm:pl-4 sm:ml-1 w-full sm:w-auto">
-                        {!t.isPlaying ? (
-                          <button onClick={() => {
-                             setActiveTimers(cur => cur.map(curT => curT.deadlineId === t.deadlineId ? {...curT, isPlaying: true, lastStartedAt: Date.now()} : curT));
-                          }} className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-blue-400 flex items-center justify-center hover:bg-blue-500 hover:text-white transition" title="Retomar">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                          </button>
-                        ) : (
-                          <button onClick={() => handlePauseTimer(t.deadlineId)} className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-amber-400 flex items-center justify-center hover:bg-amber-500 hover:text-white transition" title="Pausar">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>
-                          </button>
-                        )}
-                        <button onClick={() => handleStopTimer(t.deadlineId)} className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition" title="Parar e Salvar">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
-                        </button>
-                     </div>
+              return (
+                <div
+                  key={t.deadlineId}
+                  className="bg-slate-900 border border-slate-700 shadow-2xl shadow-blue-900/20 rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 hover:scale-[1.02] transition"
+                >
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      {t.isPlaying && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                      )}
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                        {t.empresa}
+                      </span>
+                    </div>
+                    <span
+                      className="text-xs font-bold text-white max-w-[200px] truncate"
+                      title={t.peca}
+                    >
+                      {t.peca}
+                    </span>
                   </div>
-                )
-             })}
+                  <div className="font-mono text-lg font-black tracking-wider text-blue-400 bg-slate-950 px-3 py-1 rounded-xl border border-slate-800">
+                    {hrs}:{mins}:{secs}
+                  </div>
+                  <div className="flex items-center gap-1.5 sm:border-l border-slate-700 sm:pl-4 sm:ml-1 w-full sm:w-auto">
+                    {!t.isPlaying ? (
+                      <button
+                        onClick={() => {
+                          setActiveTimers((cur) =>
+                            cur.map((curT) =>
+                              curT.deadlineId === t.deadlineId
+                                ? {
+                                    ...curT,
+                                    isPlaying: true,
+                                    lastStartedAt: Date.now(),
+                                  }
+                                : curT,
+                            ),
+                          );
+                        }}
+                        className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-blue-400 flex items-center justify-center hover:bg-blue-500 hover:text-white transition"
+                        title="Retomar"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handlePauseTimer(t.deadlineId)}
+                        className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-amber-400 flex items-center justify-center hover:bg-amber-500 hover:text-white transition"
+                        title="Pausar"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect width="4" height="16" x="6" y="4" />
+                          <rect width="4" height="16" x="14" y="4" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleStopTimer(t.deadlineId)}
+                      className="w-full sm:w-8 h-8 rounded-lg bg-slate-800 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition"
+                      title="Parar e Salvar"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect
+                          width="18"
+                          height="18"
+                          x="3"
+                          y="3"
+                          rx="2"
+                          ry="2"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
