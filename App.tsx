@@ -2732,7 +2732,7 @@ const Sidebar = ({
       : [
           { id: "dashboard", label: "Dashboard", icon: <Icons.Dashboard /> },
           { id: "agenda", label: "Agenda", icon: <Icons.Calendar /> },
-          { id: "meetings", label: "Reuniões", icon: <Icons.Users /> },
+          { id: "meetings", label: "Sala de Reuniões", icon: <Icons.Video /> },
           {
             id: "deadlines",
             label: "Controle de Prazos",
@@ -8134,14 +8134,12 @@ service cloud.firestore {
                                   <Icons.Check />
                                 </div>
                               </button>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <div
-                                  className={`w-1 h-1 rounded-full ${isCompleted ? "bg-emerald-500" : "bg-red-500"}`}
-                                />
+                              <div className="flex justify-between items-start">
                                 <span
-                                  className={`text-[7px] font-black uppercase ${isCompleted ? "text-emerald-600" : "text-red-600"}`}
+                                  className={`${isCompleted ? "bg-emerald-600" : "bg-red-600"} text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1`}
                                 >
-                                  Processual
+                                  <Icons.FileText className="w-2 h-2" />{" "}
+                                  PROCESSUAL
                                 </span>
                               </div>
                               <div className="flex flex-col">
@@ -8246,14 +8244,12 @@ service cloud.firestore {
                                   <Icons.Check />
                                 </div>
                               </button>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <div
-                                  className={`w-1 h-1 rounded-full ${isCompleted ? "bg-emerald-500" : "bg-blue-600"}`}
-                                />
+                              <div className="flex justify-between items-start">
                                 <span
-                                  className={`text-[7px] font-black uppercase ${isCompleted ? "text-emerald-600" : "text-blue-600"}`}
+                                  className={`${isCompleted ? "bg-emerald-600" : "bg-blue-600"} text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1`}
                                 >
-                                  Administrativo
+                                  <Icons.Calendar className="w-2 h-2" />{" "}
+                                  ADMINISTRATIVO
                                 </span>
                               </div>
                               <p
