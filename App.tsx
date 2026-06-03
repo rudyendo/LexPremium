@@ -3065,6 +3065,7 @@ export default function App() {
     alerts: ["24H", "2H"], // default alerts
   });
   const [selectedMeetingDate, setSelectedMeetingDate] = useState(new Date());
+  const [meetingsSearch, setMeetingsSearch] = useState("");
 
   // Time Tracking Module States
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
@@ -7260,6 +7261,46 @@ export default function App() {
     });
   }, [deadlines, deadlineSearchTerm]);
 
+  const filteredMeetings = useMemo(() => {
+    if (!meetings) return [];
+    const search = meetingsSearch.trim().toLowerCase();
+
+    // If query is empty, filter by selectedMeetingDate and sort by startTime
+    if (!search) {
+      return meetings
+        .filter((m) => m.date === formatDateToISO(selectedMeetingDate))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }
+
+    // If there is query, filter across all meetings and sort by date then startTime
+    return meetings
+      .filter((meeting) => {
+        const titleMatch = (meeting.title || "").toLowerCase().includes(search);
+        const descMatch = (meeting.description || "").toLowerCase().includes(search);
+        const timeMatch =
+          (meeting.startTime || "").toLowerCase().includes(search) ||
+          (meeting.endTime || "").toLowerCase().includes(search) ||
+          `${meeting.startTime} às ${meeting.endTime}`.toLowerCase().includes(search);
+
+        const participantMatch = meeting.participantsIds.some((pid) => {
+          const prof = teamProfiles.find((p) => p.id === pid);
+          return prof?.name?.toLowerCase().includes(search) || prof?.role?.toLowerCase().includes(search);
+        });
+
+        const clientMatch = meeting.clientsIds?.some((cid) => {
+          const client = clients.find((c) => c.id === cid);
+          return client?.displayName?.toLowerCase().includes(search) || client?.name?.toLowerCase().includes(search);
+        });
+
+        return titleMatch || descMatch || timeMatch || participantMatch || clientMatch;
+      })
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.startTime.localeCompare(b.startTime);
+      });
+  }, [meetings, meetingsSearch, selectedMeetingDate, teamProfiles, clients]);
+
   const handleEditSetting = (
     index: number,
     list: string[],
@@ -7732,7 +7773,7 @@ service cloud.firestore {
                     : view === "agenda"
                       ? "Agenda"
                       : view === "meetings"
-                        ? "Salas de Reunião"
+                        ? "Sala de Reuniões"
                         : view === "correspondence"
                           ? "Ofícios e Memorandos"
                           : view === "documents"
@@ -8929,86 +8970,119 @@ service cloud.firestore {
         )}
 
         {view === "meetings" && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            {/* KPI Banner Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                  <Icons.Calendar className="w-6 h-6" />
+          <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Elite Status KPI Banner */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Box 1 */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-100 transition-colors">
+                    <Icons.Calendar className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                      Compromissos Hoje
+                    </p>
+                    <h4 className="text-3xl font-black text-slate-930 tracking-tight mt-1">
+                      {
+                        meetings.filter(
+                          (m) => m.date === formatDateToISO(selectedMeetingDate),
+                        ).length
+                      }
+                    </h4>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
-                    Compromissos Hoje
-                  </p>
-                  <h4 className="text-2xl font-black text-slate-800">
-                    {
-                      meetings.filter(
-                        (m) => m.date === formatDateToISO(selectedMeetingDate),
-                      ).length
-                    }
-                  </h4>
-                </div>
+                <div className="absolute top-0 right-0 h-full w-1.5 bg-blue-600" />
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Icons.Users className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
-                    Minha Participação
-                  </p>
-                  <h4 className="text-2xl font-black text-slate-800">
-                    {
-                      meetings.filter(
-                        (m) =>
-                          m.date === formatDateToISO(selectedMeetingDate) &&
-                          m.participantsIds.includes(userProfile?.id || ""),
-                      ).length
-                    }
-                  </h4>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
-                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                  <Icons.Clock className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
-                    Primeira Reserva
-                  </p>
-                  <h4 className="text-lg font-black text-slate-800">
-                    {(() => {
-                      const dayList = meetings
-                        .filter(
+              {/* Box 2 */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-slate-900 text-white rounded-xl group-hover:bg-slate-800 transition-colors">
+                    <Icons.Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                      Minha Participação
+                    </p>
+                    <h4 className="text-3xl font-black text-slate-930 tracking-tight mt-1">
+                      {
+                        meetings.filter(
                           (m) =>
-                            m.date === formatDateToISO(selectedMeetingDate),
-                        )
-                        .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                      return dayList.length > 0
-                        ? `${dayList[0].startTime} às ${dayList[0].endTime}`
-                        : "--:--";
-                    })()}
-                  </h4>
+                            m.date === formatDateToISO(selectedMeetingDate) &&
+                            m.participantsIds.includes(userProfile?.id || ""),
+                        ).length
+                      }
+                    </h4>
+                  </div>
                 </div>
+                <div className="absolute top-0 right-0 h-full w-1.5 bg-[#0F172A]" />
+              </div>
+
+              {/* Box 3 */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-100 transition-colors">
+                    <Icons.Clock className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                      Primeira Reserva
+                    </p>
+                    <h4 className="text-lg font-black text-slate-930 tracking-tight mt-1">
+                      {(() => {
+                        const dayList = meetings
+                          .filter(
+                            (m) =>
+                              m.date === formatDateToISO(selectedMeetingDate),
+                          )
+                          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+                        return dayList.length > 0
+                          ? `${dayList[0].startTime} às ${dayList[0].endTime}`
+                          : "--:--";
+                      })()}
+                    </h4>
+                  </div>
+                </div>
+                <div className="absolute top-0 right-0 h-full w-1.5 bg-amber-500" />
               </div>
             </div>
 
-            {/* Main Schedule Container */}
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden p-6 md:p-8">
+            {/* Main Schedule Workspace Container */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100/80 overflow-hidden p-6 md:p-8">
+              {/* Header section with Filter and Scheduler Controls */}
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-100 font-sans">
-                <div>
-                  <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block mb-1">
-                    Agenda de Reservas
-                  </span>
-                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
-                    Reservas de Salas & Reuniões
-                  </h3>
-                  <p className="text-xs font-semibold text-slate-400">
-                    Acompanhe horários de conciliações, sustentações orais e
-                    reuniões presenciais ou remotas.
-                  </p>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between xl:justify-start gap-6 flex-grow">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block mb-1">
+                      Agenda de Reservas
+                    </span>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
+                      Reservas da Sala de Reuniões
+                    </h3>
+                  </div>
+
+                  {/* Enhanced Search Bar */}
+                  <div className="relative w-full lg:w-96">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                      <Icons.Search className="w-4 h-4 text-blue-600/85" />
+                    </span>
+                    <input
+                      type="text"
+                      value={meetingsSearch}
+                      onChange={(e) => setMeetingsSearch(e.target.value)}
+                      placeholder="BUSCAR HORÁRIO, CLIENTE, COLEGAS..."
+                      className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl text-[10px] font-black placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/80 focus:bg-white transition-all uppercase tracking-widest shadow-inner placeholder:font-black text-slate-800"
+                    />
+                    {meetingsSearch && (
+                      <button
+                        onClick={() => setMeetingsSearch("")}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Week Strips & Dynamic Date Picker */}
@@ -9020,7 +9094,7 @@ service cloud.firestore {
                         newDate.setDate(newDate.getDate() - 1);
                         setSelectedMeetingDate(newDate);
                       }}
-                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all"
+                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all hover:shadow-sm"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -9055,7 +9129,7 @@ service cloud.firestore {
                             <button
                               key={i}
                               onClick={() => setSelectedMeetingDate(itemDay)}
-                              className={`px-3 py-2 rounded-xl text-center min-w-[50px] transition-all flex flex-col items-center ${isSel ? "bg-[#0F172A] text-white shadow-md shadow-slate-900/10" : "hover:bg-slate-100 text-slate-500"}`}
+                              className={`px-3.5 py-2 rounded-xl text-center min-w-[56px] transition-all flex flex-col items-center ${isSel ? "bg-[#0F172A] text-white shadow-md shadow-slate-900/15" : "hover:bg-white hover:shadow-sm text-slate-500"}`}
                             >
                               <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
                                 {itemDay
@@ -9064,7 +9138,7 @@ service cloud.firestore {
                                   })
                                   .replace(".", "")}
                               </span>
-                              <span className="text-xs font-black">
+                              <span className="text-xs font-black mt-0.5">
                                 {itemDay.getDate()}
                               </span>
                             </button>
@@ -9088,7 +9162,7 @@ service cloud.firestore {
                         newDate.setDate(newDate.getDate() + 1);
                         setSelectedMeetingDate(newDate);
                       }}
-                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all"
+                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all hover:shadow-sm"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -9108,20 +9182,16 @@ service cloud.firestore {
 
                   <button
                     onClick={() => setSelectedMeetingDate(new Date())}
-                    className="px-4 py-3 bg-[#0F172A]/5 text-slate-800 font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-[#0F172A]/10 transition-all text-center"
+                    className="px-5 py-3 bg-[#0F172A]/5 text-[#0F172A] font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-[#0F172A]/10 transition-all text-center border border-slate-200/50 hover:shadow-sm"
                   >
                     Hoje
                   </button>
                 </div>
               </div>
 
-              {/* Enhanced Schedule Timeline */}
+              {/* Master Elegant Agenda Stream / Timetable */}
               <div className="space-y-6 relative border-l-2 border-slate-100 pl-6 md:pl-10 ml-4 py-2">
-                {meetings
-                  .filter(
-                    (m) => m.date === formatDateToISO(selectedMeetingDate),
-                  )
-                  .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                {filteredMeetings
                   .map((meeting) => {
                     const isParticipant = meeting.participantsIds.includes(
                       userProfile?.id || "",
@@ -9129,28 +9199,44 @@ service cloud.firestore {
                     const isMine = meeting.userId === userProfile?.id;
                     const isCompleted =
                       meeting.status === DeadlineStatus.COMPLETED;
+                    const hasClients = (meeting.clientsIds?.length ?? 0) > 0;
+
+                    // Compute dynamic sidebar border color reflecting the participants structure
+                    const statusBorderClass = isMine
+                      ? "border-l-4 border-l-blue-600"
+                      : hasClients
+                        ? "border-l-4 border-l-emerald-500"
+                        : "border-l-4 border-l-slate-400";
 
                     return (
                       <div
                         key={meeting.id}
-                        className="group relative bg-white rounded-2xl border border-slate-100 hover:border-slate-350 transition-all p-6 shadow-sm hover:shadow-xl md:hover:translate-x-1 duration-300"
+                        className={`group relative bg-white rounded-2xl border border-slate-150 ${statusBorderClass} hover:border-slate-300 transition-all p-6 shadow-sm hover:shadow-md duration-300`}
                       >
-                        {/* Bullet indicators on timeline */}
-                        <div className="absolute -left-[30px] md:-left-[46px] top-8 w-4 h-4 rounded-full border-4 border-white bg-blue-600 ring-2 ring-blue-100 group-hover:scale-110 transition-transform" />
+                        {/* Timeline node */}
+                        <div className={`absolute -left-[31px] md:-left-[47px] top-8 w-4 h-4 rounded-full border-4 border-white ${isMine ? "bg-blue-600" : hasClients ? "bg-emerald-500" : "bg-slate-400"} ring-2 ring-slate-100 group-hover:scale-110 transition-transform`} />
 
-                        <div className="flex flex-col lg:flex-row justify-between items-start gap-4 lg:gap-8">
-                          {/* Duration Block */}
-                          <div className="flex-shrink-0 flex items-center lg:flex-col items-start gap-2 lg:gap-0 lg:w-32 bg-slate-50 border border-slate-100 px-3.5 py-2.5 rounded-xl text-slate-800 font-sans">
-                            <span className="text-lg font-black text-slate-900 tracking-tight leading-none block">
-                              {meeting.startTime}
-                            </span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block lg:mt-1">
-                              Fim: {meeting.endTime}
+                        <div className="flex flex-col lg:flex-row justify-between items-stretch gap-6">
+                          {/* Left Panel: Fine-Tuned Time Indicator Column */}
+                          <div className="flex-shrink-0 flex lg:flex-col items-start justify-center lg:justify-start lg:w-28 bg-slate-50 border border-slate-100 p-3 rounded-xl text-slate-850 font-sans">
+                            {meetingsSearch.trim() && (
+                              <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest block mb-1">
+                                {formatLocalDate(meeting.date)}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                              <Icons.Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="text-base font-black text-slate-900 tracking-tight leading-none">
+                                {meeting.startTime}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block lg:mt-1.5 ml-5 lg:ml-0">
+                              fim {meeting.endTime}
                             </span>
                           </div>
 
-                          {/* Meeting Subject Info */}
-                          <div className="flex-grow space-y-3 font-sans">
+                          {/* Central Panel: Meeting Subject & Notes Details */}
+                          <div className="flex-grow space-y-4 font-sans">
                             <div className="flex flex-wrap items-center gap-2">
                               <h4
                                 className={`text-base font-extrabold tracking-tight ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}
@@ -9163,23 +9249,25 @@ service cloud.firestore {
                                 </span>
                               )}
                               {isParticipant && !isMine && (
-                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase tracking-widest rounded border border-indigo-100">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[8px] font-black uppercase tracking-widest rounded border border-slate-200">
                                   Convidado
                                 </span>
                               )}
                             </div>
 
                             {meeting.description && (
-                              <p className="text-sm font-semibold text-slate-500 leading-relaxed max-w-4xl">
-                                {meeting.description}
-                              </p>
+                              <div className="bg-slate-50/55 border-l-2 border-slate-200 pl-4 py-2 rounded-r-xl max-w-4xl">
+                                <p className="text-xs font-semibold text-slate-600 leading-relaxed italic">
+                                  {meeting.description}
+                                </p>
+                              </div>
                             )}
 
-                            {/* Dynamic lists for office members and clients */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100">
+                            {/* Beautiful Grid Layout for Team and Clients */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 mt-1">
                               <div>
-                                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                                  Escritório Participante
+                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+                                  Colegas do Escritório
                                 </span>
                                 <div className="flex flex-wrap gap-2">
                                   {meeting.participantsIds.map((pid) => {
@@ -9198,25 +9286,30 @@ service cloud.firestore {
                                     return (
                                       <div
                                         key={pid}
-                                        className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 rounded-lg py-1 px-2.5 shadow-sm"
+                                        className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/50 rounded-xl py-1.5 px-3 hover:bg-slate-100 transition-colors cursor-default"
                                         title={prof.role}
                                       >
-                                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[8px] flex items-center justify-center shrink-0">
+                                        <div className="w-6 h-6 rounded-full bg-slate-900 text-white font-black text-[9px] flex items-center justify-center shrink-0">
                                           {initials}
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-700">
-                                          {prof.name}
-                                        </span>
+                                        <div className="flex flex-col">
+                                          <span className="text-[10px] font-black text-slate-850 leading-none">
+                                            {prof.name}
+                                          </span>
+                                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                            {prof.role}
+                                          </span>
+                                        </div>
                                       </div>
                                     );
                                   })}
                                 </div>
                               </div>
 
-                              {(meeting.clientsIds?.length ?? 0) > 0 && (
+                              {hasClients && (
                                 <div>
-                                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                                    Clientes Participantes
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+                                    Clientes Representados
                                   </span>
                                   <div className="flex flex-wrap gap-2">
                                     {meeting.clientsIds?.map((cid) => {
@@ -9227,14 +9320,19 @@ service cloud.firestore {
                                       return (
                                         <div
                                           key={cid}
-                                          className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-lg py-1 px-2.5 shadow-sm"
+                                          className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl py-1.5 px-3 hover:bg-emerald-100/70 transition-colors cursor-default"
                                         >
-                                          <div className="w-4 h-4 rounded bg-emerald-600 text-white font-extrabold text-[8px] flex items-center justify-center shrink-0">
-                                            C
+                                          <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                                            <Icons.Users className="w-3.5 h-3.5 text-white" />
                                           </div>
-                                          <span className="text-[10px] font-bold text-emerald-800">
-                                            {client.displayName}
-                                          </span>
+                                          <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-emerald-950 leading-none">
+                                              {client.displayName}
+                                            </span>
+                                            <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">
+                                              Cliente
+                                            </span>
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -9243,18 +9341,16 @@ service cloud.firestore {
                               )}
                             </div>
 
-                            {/* Alarm Notifications Line */}
+                            {/* Symmetrical Alarm Notifications Badge Banner */}
                             {meeting.alerts && meeting.alerts.length > 0 && (
-                              <div className="flex items-center gap-1.5 pt-2 text-[10px] font-black uppercase text-amber-600 tracking-wider">
-                                <Icons.Bell className="w-3.5 h-3.5 mr-1" />
-                                <span className="opacity-80">
-                                  Alertas configurados:
-                                </span>
-                                <div className="flex gap-1">
+                              <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 text-[9px] font-black uppercase text-amber-600 tracking-widest">
+                                <Icons.Bell className="w-3.5 h-3.5" />
+                                <span>Avisos ativos:</span>
+                                <div className="flex flex-wrap gap-1">
                                   {meeting.alerts.map((al) => (
                                     <span
                                       key={al}
-                                      className="bg-amber-100/65 px-1.5 py-0.5 rounded text-[8px] text-amber-800 font-extrabold uppercase ml-1 font-sans"
+                                      className="bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded-lg text-[8px] text-amber-800 font-extrabold"
                                     >
                                       {al === "ON_TIME" ? "No horário" : al}
                                     </span>
@@ -9264,17 +9360,17 @@ service cloud.firestore {
                             )}
                           </div>
 
-                          {/* Quick Controls */}
-                          <div className="flex-shrink-0 flex items-center gap-1 self-stretch justify-end lg:justify-center border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-3 lg:pt-0">
+                          {/* Right Panel: Sharp Control Action Buttons */}
+                          <div className="flex-shrink-0 flex items-center gap-1 lg:flex-col self-stretch justify-end lg:justify-start border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-3 lg:pt-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEditMeeting(meeting);
                               }}
                               className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                              title="Editar reserva (Reagendar)"
+                              title="Editar reserva"
                             >
-                              <Icons.Edit className="w-5 h-5" />
+                              <Icons.Edit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={(e) => {
@@ -9284,7 +9380,7 @@ service cloud.firestore {
                               className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                               title="Excluir reserva"
                             >
-                              <Icons.Trash className="w-5 h-5" />
+                              <Icons.Trash className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -9292,16 +9388,20 @@ service cloud.firestore {
                     );
                   })}
 
-                {meetings.filter(
-                  (m) => m.date === formatDateToISO(selectedMeetingDate),
-                ).length === 0 && (
-                  <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <Icons.Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                {filteredMeetings.length === 0 && (
+                  <div className="text-center py-24 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-250">
+                    {meetingsSearch.trim() ? (
+                      <Icons.Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    ) : (
+                      <Icons.Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    )}
                     <h4 className="text-base font-black text-slate-700 uppercase tracking-widest mb-2 font-sans">
-                      Período Livre
+                      {meetingsSearch.trim() ? "Nenhum Resultado" : "Período Livre"}
                     </h4>
                     <p className="text-sm font-medium text-slate-500 font-sans">
-                      Nenhuma reserva para esta data.
+                      {meetingsSearch.trim()
+                        ? "Não encontramos nenhuma reserva com os critérios informados."
+                        : "Nenhuma reserva para esta data."}
                     </p>
                   </div>
                 )}
