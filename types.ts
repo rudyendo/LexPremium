@@ -151,6 +151,24 @@ export interface AdminTask {
   recurrenceEndDate?: string;
 }
 
+export interface Meeting {
+  id: string;
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  participantsIds: string[]; // List of user IDs (members)
+  clientsIds?: string[]; // List of Client IDs
+  alerts?: AdminTaskAlert[];
+  status: DeadlineStatus;
+  userId: string;
+  officeId: string;
+  roomId?: string; // Just in case for future expansions
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface NotificationRule {
   id: string;
   deadlineType: string; // Corresponds to 'peca' or 'ALL'

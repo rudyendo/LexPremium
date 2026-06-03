@@ -145,6 +145,16 @@ service cloud.firestore {
              data.get('officeId', '') is string;
     }
 
+    function isValidMeeting(data) {
+      return data.get('title', '') is string && data.get('title', '').size() <= 200 &&
+             data.get('date', '') is string && data.get('date', '').size() <= 10 &&
+             data.get('startTime', '') is string && data.get('startTime', '').size() <= 10 &&
+             data.get('endTime', '') is string && data.get('endTime', '').size() <= 10 &&
+             data.get('status', '') is string &&
+             data.get('userId', '') is string &&
+             data.get('officeId', '') is string;
+    }
+
     // 6. Match rules per collection
     
     match /userProfiles/{userId} {
@@ -285,6 +295,13 @@ service cloud.firestore {
         getRole() == 'ADMINISTRADOR' || getRole() == 'COORDENADOR' ||
         (existing().get('userId', '') == request.auth.uid && existing().get('status', 'DRAFT') != 'APPROVED')
       )));
+    }
+
+    match /meetings/{meetingId} {
+      allow list, get: if isVerified() && (isSuperAdmin() || resource.data.officeId == getOfficeId());
+      allow create: if isVerified() && (isSuperAdmin() || (isValidMeeting(incoming()) && incoming().get('officeId', '') == getOfficeId() && incoming().get('userId', '') == request.auth.uid));
+      allow update: if isVerified() && (isSuperAdmin() || (isValidMeeting(incoming()) && incoming().get('officeId', '') == getOfficeId() && existing().get('officeId', '') == getOfficeId()));
+      allow delete: if isVerified() && (isSuperAdmin() || (existing().get('officeId', '') == getOfficeId()));
     }
   }
 }

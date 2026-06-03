@@ -265,6 +265,28 @@
         "officeId": { "type": "string" }
       },
       "required": ["userId", "userName", "processTitle", "peca", "activityType", "durationSeconds", "status", "createdAt", "date", "officeId"]
+    },
+    "meeting": {
+      "title": "Reunião ou Reserva de Sala",
+      "description": "Horários de reuniões presidenciais ou virtuais e reservas de salas ou eventos.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "participantsIds": { "type": "array", "items": { "type": "string" } },
+        "clientsIds": { "type": "array", "items": { "type": "string" } },
+        "alerts": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" },
+        "userId": { "type": "string" },
+        "officeId": { "type": "string" },
+        "roomId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "date", "startTime", "endTime", "participantsIds", "status", "userId", "officeId", "createdAt"]
     }
   },
   "firestore": {
@@ -323,6 +345,10 @@
     "timeLogs": {
       "schema": "timeLog",
       "description": "Banco de registros de horas (timesheet) dos advogados"
+    },
+    "meetings": {
+      "schema": "meeting",
+      "description": "Agenda de reuniões e reservas de salas ou eventos"
     }
   }
 }

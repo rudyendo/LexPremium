@@ -27,6 +27,7 @@ import {
   TimeLogStatus,
   ReviewState,
   ReviewLogEntry,
+  Meeting,
 } from "./types";
 import {
   Icons,
@@ -2731,6 +2732,7 @@ const Sidebar = ({
       : [
           { id: "dashboard", label: "Dashboard", icon: <Icons.Dashboard /> },
           { id: "agenda", label: "Agenda", icon: <Icons.Calendar /> },
+          { id: "meetings", label: "Reuniões", icon: <Icons.Users /> },
           {
             id: "deadlines",
             label: "Controle de Prazos",
@@ -3046,6 +3048,23 @@ export default function App() {
   const [dashboardCalendarDate, setDashboardCalendarDate] = useState(
     new Date(),
   );
+
+  // Meetings Module States
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
+  const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+  const [isNewMeetingModalOpen, setIsNewMeetingModalOpen] = useState(false);
+  const [newMeetingForm, setNewMeetingForm] = useState<Partial<Meeting>>({
+    title: "",
+    description: "",
+    date: new Date().toISOString().split("T")[0],
+    startTime: "09:00",
+    endTime: "10:00",
+    participantsIds: [],
+    clientsIds: [],
+    alerts: ["24H", "2H"], // default alerts
+  });
+  const [selectedMeetingDate, setSelectedMeetingDate] = useState(new Date());
 
   // Time Tracking Module States
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
@@ -4261,6 +4280,62 @@ export default function App() {
     return () => unsubscribe();
   }, [userProfile]);
 
+  // Sync Meetings
+  useEffect(() => {
+    if (!userProfile) return;
+
+    let q = firestoreQuery(
+      collection(db, "meetings"),
+      where("officeId", "==", userProfile.officeId),
+    );
+
+    // Filtros de visibilidade
+    if (userProfile.role === UserRole.COORDINATOR) {
+      if (userProfile.sector === Sector.GENERAL) {
+        q = firestoreQuery(
+          q,
+          or(
+            where("sector", "==", Sector.GENERAL),
+            where("sector", "==", null),
+            where("sector", "==", ""),
+          ),
+        );
+      } else {
+        q = firestoreQuery(q, where("sector", "==", userProfile.sector));
+      }
+    } else if (
+      userProfile.role === UserRole.LAWYER ||
+      userProfile.role === UserRole.INTERN
+    ) {
+      q = firestoreQuery(
+        q,
+        or(
+          where("userId", "==", userProfile.id),
+          where("participantsIds", "array-contains", userProfile.id),
+        ),
+      );
+    }
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const loaded = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Meeting[];
+        setMeetings(
+          loaded.sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) ||
+              a.startTime.localeCompare(b.startTime),
+          ),
+        );
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, "meetings"),
+    );
+    return () => unsubscribe();
+  }, [userProfile]);
+
   // Sync Clientes
   useEffect(() => {
     if (!userProfile) return;
@@ -4691,6 +4766,82 @@ export default function App() {
       recurrenceEndDate: "",
     });
     setEditingAdminTaskId(null);
+  };
+
+  const resetMeetingForm = () => {
+    setNewMeetingForm({
+      title: "",
+      description: "",
+      date: new Date().toISOString().split("T")[0],
+      startTime: "09:00",
+      endTime: "10:00",
+      participantsIds: userProfile ? [userProfile.id] : [],
+      clientsIds: [],
+      alerts: ["24H", "2H"],
+    });
+    setEditingMeetingId(null);
+  };
+
+  const handleCreateMeeting = async () => {
+    if (!user || !userProfile) return;
+    if (
+      !newMeetingForm.title ||
+      !newMeetingForm.date ||
+      !newMeetingForm.startTime ||
+      !newMeetingForm.endTime
+    ) {
+      alert("Por favor, preencha o título, data, horário de início e término.");
+      return;
+    }
+
+    try {
+      if (editingMeetingId) {
+        await updateDoc(doc(db, "meetings", editingMeetingId), {
+          ...newMeetingForm,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        await addDoc(collection(db, "meetings"), {
+          ...newMeetingForm,
+          userId: user.uid,
+          officeId: userProfile?.officeId || user.uid,
+          sector: userProfile?.sector || Sector.GENERAL,
+          status: DeadlineStatus.PENDING,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      setIsNewMeetingModalOpen(false);
+      resetMeetingForm();
+    } catch (err: any) {
+      handleFirestoreError(
+        err,
+        editingMeetingId ? OperationType.UPDATE : OperationType.CREATE,
+        "meetings",
+      );
+    }
+  };
+
+  const handleEditMeeting = (meeting: Meeting) => {
+    setEditingMeetingId(meeting.id);
+    setNewMeetingForm({
+      title: meeting.title,
+      description: meeting.description || "",
+      date: meeting.date,
+      startTime: meeting.startTime,
+      endTime: meeting.endTime,
+      participantsIds: meeting.participantsIds || [],
+      clientsIds: meeting.clientsIds || [],
+      alerts: meeting.alerts || [],
+    });
+    setIsNewMeetingModalOpen(true);
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    try {
+      await deleteDoc(doc(db, "meetings", meetingId));
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.DELETE, "meetings");
+    }
   };
 
   const resetDeadlineForm = () => {
@@ -7580,21 +7731,23 @@ service cloud.firestore {
                     ? "Controle de Prazos"
                     : view === "agenda"
                       ? "Agenda"
-                      : view === "correspondence"
-                        ? "Ofícios e Memorandos"
-                        : view === "documents"
-                          ? "Gerador de Documentos"
-                          : view === "reports"
-                            ? "Relatórios"
-                            : view === "team"
-                              ? "Gestão de Equipe"
-                              : view === "monitoring"
-                                ? "Acompanhamento Processual"
-                                : view === "finance"
-                                  ? "Controle Financeiro"
-                                  : view === "superadmin"
-                                    ? "Controle Financeiro Geral (Sistema)"
-                                    : "Configurações"}
+                      : view === "meetings"
+                        ? "Salas de Reunião"
+                        : view === "correspondence"
+                          ? "Ofícios e Memorandos"
+                          : view === "documents"
+                            ? "Gerador de Documentos"
+                            : view === "reports"
+                              ? "Relatórios"
+                              : view === "team"
+                                ? "Gestão de Equipe"
+                                : view === "monitoring"
+                                  ? "Acompanhamento Processual"
+                                  : view === "finance"
+                                    ? "Controle Financeiro"
+                                    : view === "superadmin"
+                                      ? "Controle Financeiro Geral (Sistema)"
+                                      : "Configurações"}
             </h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse" />
@@ -7629,6 +7782,16 @@ service cloud.firestore {
                   <Icons.Plus /> NOVA TAREFA
                 </button>
               </div>
+            ) : view === "meetings" ? (
+              <button
+                onClick={() => {
+                  resetMeetingForm();
+                  setIsNewMeetingModalOpen(true);
+                }}
+                className="w-full md:w-auto bg-blue-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm shadow-xl shadow-blue-600/30 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+              >
+                <Icons.Plus /> NOVA REUNIÃO
+              </button>
             ) : view === "agenda" ? (
               <button
                 onClick={() => {
@@ -7814,6 +7977,9 @@ service cloud.firestore {
                     .sort((a, b) =>
                       (a.time || "00:00").localeCompare(b.time || "00:00"),
                     );
+                  const dayMeetings = meetings
+                    .filter((m) => m.date === dayStr)
+                    .sort((a, b) => a.startTime.localeCompare(b.startTime));
                   const isToday = formatDateToISO(new Date()) === dayStr;
 
                   return (
@@ -7834,11 +8000,51 @@ service cloud.firestore {
                         </p>
                       </div>
                       <div className="space-y-3 flex-1 overflow-y-auto no-scrollbar px-1 py-1">
-                        {dayDeadlines.length === 0 && dayAdm.length === 0 && (
-                          <div className="h-full flex items-center justify-center py-10 opacity-20">
-                            <Icons.Clock />
-                          </div>
-                        )}
+                        {dayDeadlines.length === 0 &&
+                          dayAdm.length === 0 &&
+                          dayMeetings.length === 0 && (
+                            <div className="h-full flex items-center justify-center py-10 opacity-20">
+                              <Icons.Clock />
+                            </div>
+                          )}
+                        {dayMeetings.map((m) => {
+                          const isParticipant = m.participantsIds.includes(
+                            userProfile?.id || "",
+                          );
+                          const isMine = m.userId === userProfile?.id;
+
+                          return (
+                            <div
+                              key={m.id}
+                              className="p-3 rounded-xl transition-all shadow-sm flex flex-col gap-2 bg-indigo-50 border-indigo-100 border relative overflow-hidden cursor-pointer hover:border-indigo-300"
+                              onClick={() => {
+                                setView("meetings");
+                                setSelectedMeetingDate(
+                                  new Date(m.date + "T00:00:00"),
+                                );
+                              }}
+                            >
+                              <div className="flex justify-between items-start">
+                                <span className="bg-indigo-600 text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1">
+                                  <Icons.Users className="w-2 h-2" /> REUNIÃO
+                                </span>
+                                {(isMine || isParticipant) && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-indigo-900 uppercase tracking-tight line-clamp-2">
+                                  {m.title}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <p className="text-[9px] font-bold text-indigo-600/80 uppercase">
+                                    {m.startTime} - {m.endTime}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                         {dayDeadlines.map((d) => {
                           const isCompleted =
                             d.status === DeadlineStatus.COMPLETED;
@@ -8723,6 +8929,388 @@ service cloud.firestore {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {view === "meetings" && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {/* KPI Banner Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                  <Icons.Calendar className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                    Compromissos Hoje
+                  </p>
+                  <h4 className="text-2xl font-black text-slate-800">
+                    {
+                      meetings.filter(
+                        (m) => m.date === formatDateToISO(selectedMeetingDate),
+                      ).length
+                    }
+                  </h4>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Icons.Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                    Minha Participação
+                  </p>
+                  <h4 className="text-2xl font-black text-slate-800">
+                    {
+                      meetings.filter(
+                        (m) =>
+                          m.date === formatDateToISO(selectedMeetingDate) &&
+                          m.participantsIds.includes(userProfile?.id || ""),
+                      ).length
+                    }
+                  </h4>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-md flex items-center gap-4">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <Icons.Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
+                    Primeira Reserva
+                  </p>
+                  <h4 className="text-lg font-black text-slate-800">
+                    {(() => {
+                      const dayList = meetings
+                        .filter(
+                          (m) =>
+                            m.date === formatDateToISO(selectedMeetingDate),
+                        )
+                        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+                      return dayList.length > 0
+                        ? `${dayList[0].startTime} às ${dayList[0].endTime}`
+                        : "--:--";
+                    })()}
+                  </h4>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Schedule Container */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden p-6 md:p-8">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-100 font-sans">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block mb-1">
+                    Agenda de Reservas
+                  </span>
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
+                    Reservas de Salas & Reuniões
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400">
+                    Acompanhe horários de conciliações, sustentações orais e
+                    reuniões presenciais ou remotas.
+                  </p>
+                </div>
+
+                {/* Week Strips & Dynamic Date Picker */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner">
+                    <button
+                      onClick={() => {
+                        const newDate = new Date(selectedMeetingDate);
+                        newDate.setDate(newDate.getDate() - 1);
+                        setSelectedMeetingDate(newDate);
+                      }}
+                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+
+                    {/* Quick Week Strips Selection */}
+                    <div className="hidden md:flex items-center gap-1">
+                      {(() => {
+                        const start = new Date(selectedMeetingDate);
+                        const day = start.getDay();
+                        const diff =
+                          start.getDate() - (day === 0 ? 6 : day - 1);
+                        const monday = new Date(start.setDate(diff));
+                        return Array.from({ length: 6 }).map((_, i) => {
+                          const itemDay = new Date(monday);
+                          itemDay.setDate(monday.getDate() + i);
+                          const isSel =
+                            formatDateToISO(itemDay) ===
+                            formatDateToISO(selectedMeetingDate);
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => setSelectedMeetingDate(itemDay)}
+                              className={`px-3 py-2 rounded-xl text-center min-w-[50px] transition-all flex flex-col items-center ${isSel ? "bg-[#0F172A] text-white shadow-md shadow-slate-900/10" : "hover:bg-slate-100 text-slate-500"}`}
+                            >
+                              <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
+                                {itemDay
+                                  .toLocaleDateString("pt-BR", {
+                                    weekday: "short",
+                                  })
+                                  .replace(".", "")}
+                              </span>
+                              <span className="text-xs font-black">
+                                {itemDay.getDate()}
+                              </span>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    <span className="md:hidden font-black text-slate-900 min-w-[90px] text-center uppercase tracking-widest text-xs">
+                      {selectedMeetingDate
+                        .toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "short",
+                        })
+                        .replace(".", "")}
+                    </span>
+
+                    <button
+                      onClick={() => {
+                        const newDate = new Date(selectedMeetingDate);
+                        newDate.setDate(newDate.getDate() + 1);
+                        setSelectedMeetingDate(newDate);
+                      }}
+                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedMeetingDate(new Date())}
+                    className="px-4 py-3 bg-[#0F172A]/5 text-slate-800 font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-[#0F172A]/10 transition-all text-center"
+                  >
+                    Hoje
+                  </button>
+                </div>
+              </div>
+
+              {/* Enhanced Schedule Timeline */}
+              <div className="space-y-6 relative border-l-2 border-slate-100 pl-6 md:pl-10 ml-4 py-2">
+                {meetings
+                  .filter(
+                    (m) => m.date === formatDateToISO(selectedMeetingDate),
+                  )
+                  .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                  .map((meeting) => {
+                    const isParticipant = meeting.participantsIds.includes(
+                      userProfile?.id || "",
+                    );
+                    const isMine = meeting.userId === userProfile?.id;
+                    const isCompleted =
+                      meeting.status === DeadlineStatus.COMPLETED;
+
+                    return (
+                      <div
+                        key={meeting.id}
+                        className="group relative bg-white rounded-2xl border border-slate-100 hover:border-slate-350 transition-all p-6 shadow-sm hover:shadow-xl md:hover:translate-x-1 duration-300"
+                      >
+                        {/* Bullet indicators on timeline */}
+                        <div className="absolute -left-[30px] md:-left-[46px] top-8 w-4 h-4 rounded-full border-4 border-white bg-blue-600 ring-2 ring-blue-100 group-hover:scale-110 transition-transform" />
+
+                        <div className="flex flex-col lg:flex-row justify-between items-start gap-4 lg:gap-8">
+                          {/* Duration Block */}
+                          <div className="flex-shrink-0 flex items-center lg:flex-col items-start gap-2 lg:gap-0 lg:w-32 bg-slate-50 border border-slate-100 px-3.5 py-2.5 rounded-xl text-slate-800 font-sans">
+                            <span className="text-lg font-black text-slate-900 tracking-tight leading-none block">
+                              {meeting.startTime}
+                            </span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block lg:mt-1">
+                              Fim: {meeting.endTime}
+                            </span>
+                          </div>
+
+                          {/* Meeting Subject Info */}
+                          <div className="flex-grow space-y-3 font-sans">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4
+                                className={`text-base font-extrabold tracking-tight ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}
+                              >
+                                {meeting.title}
+                              </h4>
+                              {isMine && (
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest rounded border border-blue-100">
+                                  Organizador
+                                </span>
+                              )}
+                              {isParticipant && !isMine && (
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase tracking-widest rounded border border-indigo-100">
+                                  Convidado
+                                </span>
+                              )}
+                            </div>
+
+                            {meeting.description && (
+                              <p className="text-sm font-semibold text-slate-500 leading-relaxed max-w-4xl">
+                                {meeting.description}
+                              </p>
+                            )}
+
+                            {/* Dynamic lists for office members and clients */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 mt-2 border-t border-slate-100">
+                              <div>
+                                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                                  Escritório Participante
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {meeting.participantsIds.map((pid) => {
+                                    const prof = teamProfiles.find(
+                                      (p) => p.id === pid,
+                                    );
+                                    if (!prof) return null;
+                                    const initials = prof.name
+                                      ? prof.name
+                                          .split(" ")
+                                          .slice(0, 2)
+                                          .map((n) => n[0])
+                                          .join("")
+                                          .toUpperCase()
+                                      : "?";
+                                    return (
+                                      <div
+                                        key={pid}
+                                        className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 rounded-lg py-1 px-2.5 shadow-sm"
+                                        title={prof.role}
+                                      >
+                                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[8px] flex items-center justify-center shrink-0">
+                                          {initials}
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-700">
+                                          {prof.name}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {(meeting.clientsIds?.length ?? 0) > 0 && (
+                                <div>
+                                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                                    Clientes Participantes
+                                  </span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {meeting.clientsIds?.map((cid) => {
+                                      const client = clients.find(
+                                        (c) => c.id === cid,
+                                      );
+                                      if (!client) return null;
+                                      return (
+                                        <div
+                                          key={cid}
+                                          className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-lg py-1 px-2.5 shadow-sm"
+                                        >
+                                          <div className="w-4 h-4 rounded bg-emerald-600 text-white font-extrabold text-[8px] flex items-center justify-center shrink-0">
+                                            C
+                                          </div>
+                                          <span className="text-[10px] font-bold text-emerald-800">
+                                            {client.displayName}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Alarm Notifications Line */}
+                            {meeting.alerts && meeting.alerts.length > 0 && (
+                              <div className="flex items-center gap-1.5 pt-2 text-[10px] font-black uppercase text-amber-600 tracking-wider">
+                                <Icons.Bell className="w-3.5 h-3.5 mr-1" />
+                                <span className="opacity-80">
+                                  Alertas configurados:
+                                </span>
+                                <div className="flex gap-1">
+                                  {meeting.alerts.map((al) => (
+                                    <span
+                                      key={al}
+                                      className="bg-amber-100/65 px-1.5 py-0.5 rounded text-[8px] text-amber-800 font-extrabold uppercase ml-1 font-sans"
+                                    >
+                                      {al === "ON_TIME" ? "No horário" : al}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Quick Controls */}
+                          <div className="flex-shrink-0 flex items-center gap-1 self-stretch justify-end lg:justify-center border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-3 lg:pt-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditMeeting(meeting);
+                              }}
+                              className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                              title="Editar reserva (Reagendar)"
+                            >
+                              <Icons.Edit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMeetingToDelete(meeting);
+                              }}
+                              className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                              title="Excluir reserva"
+                            >
+                              <Icons.Trash className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {meetings.filter(
+                  (m) => m.date === formatDateToISO(selectedMeetingDate),
+                ).length === 0 && (
+                  <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                    <Icons.Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h4 className="text-base font-black text-slate-700 uppercase tracking-widest mb-2 font-sans">
+                      Período Livre
+                    </h4>
+                    <p className="text-sm font-medium text-slate-500 font-sans">
+                      Nenhuma reserva para esta data.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -12144,7 +12732,272 @@ service cloud.firestore {
           </div>
         </Modal>
 
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE REUNIÃO */}
+        <Modal
+          isOpen={meetingToDelete !== null}
+          onClose={() => setMeetingToDelete(null)}
+          title="Excluir Reunião"
+        >
+          <div className="space-y-6 text-center py-4 font-sans">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce">
+              <Icons.Trash className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2 max-w-md mx-auto">
+              <h4 className="text-lg font-black text-slate-800 uppercase tracking-tight">
+                Deseja realmente excluir esta reunião?
+              </h4>
+              <p className="text-sm font-semibold text-slate-500">
+                Esta ação é irreversível. A reunião{" "}
+                <span className="font-bold text-slate-800">
+                  "{meetingToDelete?.title}"
+                </span>{" "}
+                e a respectiva reserva de sala serão removidas definitivamente.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-center pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setMeetingToDelete(null)}
+                className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (meetingToDelete) {
+                    await handleDeleteMeeting(meetingToDelete.id);
+                    setMeetingToDelete(null);
+                  }
+                }}
+                className="px-5 py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-red-700 hover:shadow-lg hover:shadow-red-900/10 transition-all shadow-md"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </Modal>
+
         {/* MODAL PARA AGENDA ADMINISTRATIVA */}
+        <Modal
+          isOpen={isNewMeetingModalOpen}
+          onClose={() => {
+            setIsNewMeetingModalOpen(false);
+            resetMeetingForm();
+          }}
+          title={
+            editingMeetingId
+              ? "Editar Reunião / Reserva de Sala"
+              : "Nova Reunião / Reserva de Sala"
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Título da Reunião
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={newMeetingForm.title}
+                  onChange={(e) =>
+                    setNewMeetingForm({
+                      ...newMeetingForm,
+                      title: e.target.value,
+                    })
+                  }
+                  placeholder="Ex: Reunião de Alinhamento Cliente X"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Data
+                </label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                  value={newMeetingForm.date}
+                  onChange={(e) =>
+                    setNewMeetingForm({
+                      ...newMeetingForm,
+                      date: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Início
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                    value={newMeetingForm.startTime}
+                    onChange={(e) =>
+                      setNewMeetingForm({
+                        ...newMeetingForm,
+                        startTime: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Fim
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100"
+                    value={newMeetingForm.endTime}
+                    onChange={(e) =>
+                      setNewMeetingForm({
+                        ...newMeetingForm,
+                        endTime: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Descrição / Pauta (Opcional)
+                </label>
+                <textarea
+                  className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 min-h-[80px]"
+                  value={newMeetingForm.description}
+                  onChange={(e) =>
+                    setNewMeetingForm({
+                      ...newMeetingForm,
+                      description: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Participantes (Membros do Escritório)
+                </label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 max-h-40 overflow-y-auto space-y-2">
+                  {teamProfiles.map((member) => (
+                    <label
+                      key={member.id}
+                      className="flex items-center gap-3 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={newMeetingForm.participantsIds?.includes(
+                          member.id,
+                        )}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          const currentIds =
+                            newMeetingForm.participantsIds || [];
+                          setNewMeetingForm({
+                            ...newMeetingForm,
+                            participantsIds: isChecked
+                              ? [...currentIds, member.id]
+                              : currentIds.filter((id) => id !== member.id),
+                          });
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded bg-white border-slate-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-bold text-slate-700">
+                        {member.name} - {member.role}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Clientes Participantes (Opcional)
+                </label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 max-h-40 overflow-y-auto space-y-2">
+                  {clients.map((client) => (
+                    <label
+                      key={client.id}
+                      className="flex items-center gap-3 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={newMeetingForm.clientsIds?.includes(client.id)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          const currentIds = newMeetingForm.clientsIds || [];
+                          setNewMeetingForm({
+                            ...newMeetingForm,
+                            clientsIds: isChecked
+                              ? [...currentIds, client.id]
+                              : currentIds.filter((id) => id !== client.id),
+                          });
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded bg-white border-slate-300 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm font-bold text-slate-700">
+                        {client.displayName}
+                      </span>
+                    </label>
+                  ))}
+                  {clients.length === 0 && (
+                    <span className="text-xs text-slate-400 font-bold">
+                      Nenhum cliente cadastrado.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">
+                  Lembretes
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "24H", label: "24h Antes" },
+                    { value: "2H", label: "2h Antes" },
+                    { value: "1H", label: "1h Antes" },
+                    { value: "ON_TIME", label: "No horário" },
+                  ].map((alert) => (
+                    <button
+                      key={alert.value}
+                      onClick={() => {
+                        const current = newMeetingForm.alerts || [];
+                        const isSelected = current.includes(
+                          alert.value as AdminTaskAlert,
+                        );
+                        setNewMeetingForm({
+                          ...newMeetingForm,
+                          alerts: isSelected
+                            ? current.filter((a) => a !== alert.value)
+                            : [...current, alert.value as AdminTaskAlert],
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${newMeetingForm.alerts?.includes(alert.value as AdminTaskAlert) ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100"}`}
+                    >
+                      {alert.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreateMeeting}
+              className="w-full bg-blue-600 text-white p-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl active:scale-95 mt-4"
+            >
+              {editingMeetingId ? "Salvar Alterações" : "Confirmar Reserva"}
+            </button>
+          </div>
+        </Modal>
+
         <Modal
           isOpen={isAgendaModalOpen}
           onClose={() => {
