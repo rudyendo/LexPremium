@@ -3081,6 +3081,7 @@ export default function App() {
       reviewState?: ReviewState;
       assignedTo?: string;
       userId?: string;
+      isAdminTask?: boolean;
     }[]
   >(() => {
     try {
@@ -3197,6 +3198,7 @@ export default function App() {
     reviewState?: ReviewState;
     assignedTo?: string;
     userId?: string;
+    isAdminTask?: boolean;
   } | null>(null);
 
   const [stopTimerForm, setStopTimerForm] = useState({
@@ -5745,6 +5747,18 @@ export default function App() {
     }
   };
 
+  const toggleMeetingStatus = async (m: Meeting) => {
+    const newS =
+      m.status === DeadlineStatus.COMPLETED
+        ? DeadlineStatus.PENDING
+        : DeadlineStatus.COMPLETED;
+    try {
+      await updateDoc(doc(db, "meetings", m.id), { status: newS });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, "meetings");
+    }
+  };
+
   const deleteDeadline = async (id: string) => {
     try {
       await deleteDoc(doc(db, "deadlines", id));
@@ -5820,6 +5834,103 @@ export default function App() {
   };
 
   // --- Gestão de Tempo / Time Tracking Functions ---
+
+  const handleStartTimerForAdminTask = async (
+    task: AdminTask,
+    activityType: string = "Atividades Administrativas",
+  ) => {
+    if (!userProfile) return;
+
+    if (task.status === DeadlineStatus.COMPLETED) {
+      setTimerStartError(
+        "Esta tarefa já foi concluída e não pode ser cronometrada.",
+      );
+      return;
+    }
+
+    // 1. Pause all other running timers
+    const updatedTimers = activeTimers.map((t) => {
+      if (t.isPlaying && t.lastStartedAt) {
+        const secondsVal =
+          t.elapsedSeconds + (Date.now() - t.lastStartedAt) / 1000;
+        return {
+          ...t,
+          isPlaying: false,
+          lastStartedAt: null,
+          elapsedSeconds: secondsVal,
+        };
+      }
+      return t;
+    });
+
+    // 2. Check if a timer for this admin task already exists
+    const idx = updatedTimers.findIndex((t) => t.deadlineId === task.id);
+    if (idx >= 0) {
+      // Resume it
+      updatedTimers[idx].isPlaying = true;
+      updatedTimers[idx].lastStartedAt = Date.now();
+      updatedTimers[idx].activityType = activityType;
+      updatedTimers[idx].assignedTo =
+        task.assignedTo || updatedTimers[idx].assignedTo || "";
+      updatedTimers[idx].userId =
+        task.userId || updatedTimers[idx].userId || "";
+    } else {
+      // Add a clean new timer
+      updatedTimers.push({
+        deadlineId: task.id,
+        peca: task.title || "Tarefa Administrativa",
+        empresa: task.category || "Administrativo",
+        elapsedSeconds: 0,
+        lastStartedAt: Date.now(),
+        isPlaying: true,
+        activityType,
+        assignedTo: task.assignedTo || "",
+        userId: task.userId || "",
+        isAdminTask: true,
+      });
+    }
+
+    setActiveTimers(updatedTimers);
+  };
+
+  const handleLogManualTimeForAdminTask = (
+    task: AdminTask,
+    durationSeconds: number,
+  ) => {
+    if (task.status === DeadlineStatus.COMPLETED) {
+      setTimerStartError(
+        "Esta tarefa já foi concluída e não pode ser cronometrada.",
+      );
+      return;
+    }
+
+    const tempTimer = {
+      deadlineId: task.id,
+      empresa: task.category || "Administrativo",
+      peca: task.title || "Tarefa Administrativa",
+      activityType: "Atividades Administrativas",
+      isPlaying: false,
+      lastStartedAt: null,
+      elapsedSeconds: durationSeconds,
+      assignedTo: task.assignedTo || "",
+      userId: task.userId || "",
+      isAdminTask: true,
+    };
+
+    setTimerToStop(tempTimer);
+    setStopTimerError("");
+
+    setStopTimerForm({
+      description: "",
+      durationSeconds: durationSeconds,
+      status: TimeLogStatus.APPROVED,
+      activityType: tempTimer.activityType,
+      manualProcessTitle: tempTimer.empresa,
+      manualPiece: tempTimer.peca,
+    });
+
+    setIsStopTimerModalOpen(true);
+  };
 
   const handleStartTimerForDeadline = async (
     deadline: Deadline,
@@ -6174,97 +6285,107 @@ export default function App() {
       const logDocRef = await addDoc(collection(db, "timeLogs"), payload);
 
       if (!isManual && timerToStop) {
-        let newState: ReviewState | undefined;
-        let actionLabel: ReviewLogEntry["action"] = "TIMER_SESSION";
-
-        let deadline = deadlines.find((d) => d.id === timerToStop!.deadlineId);
-        if (!deadline && timerToStop?.deadlineId) {
+        if (timerToStop.isAdminTask) {
           try {
-            const docSnap = await getDoc(
-              doc(db, "deadlines", timerToStop.deadlineId),
-            );
-            if (docSnap && docSnap.exists()) {
-              deadline = { id: docSnap.id, ...docSnap.data() } as Deadline;
-            }
+            await updateDoc(doc(db, "adminTasks", timerToStop.deadlineId), {
+              status: DeadlineStatus.COMPLETED,
+            });
           } catch (e) {
-            console.error("Erro ao buscar prazo de backup:", e);
+            console.error("Erro ao atualizar status da tarefa administrativa:", e);
           }
-        }
+        } else {
+          let newState: ReviewState | undefined;
+          let actionLabel: ReviewLogEntry["action"] = "TIMER_SESSION";
 
-        if (deadline && reviewAction) {
-          const isExecutor =
-            deadline.reviewState === undefined ||
-            deadline.reviewState === ReviewState.NONE ||
-            deadline.reviewState === ReviewState.RETURNED_TO_LAWYER;
-
-          const responsibleUserId =
-            deadline.assignedTo || deadline.userId || userProfile.id;
-          const responsibleProfile =
-            teamProfiles.find((t) => t.id === responsibleUserId) || userProfile;
-
-          if (isExecutor && reviewAction === "SUBMIT") {
-            if (responsibleProfile.role === UserRole.LAWYER) {
-              newState = ReviewState.WAITING_COORDINATOR;
-              actionLabel = "SUBMITTED_FOR_REVIEW";
-            } else if (responsibleProfile.role === UserRole.COORDINATOR) {
-              newState = ReviewState.WAITING_ADMIN;
-              actionLabel = "SUBMITTED_FOR_REVIEW";
-            } else if (responsibleProfile.role === UserRole.ADMIN) {
-              newState = ReviewState.COMPLETED;
-              actionLabel = "COMPLETED";
+          let deadline = deadlines.find((d) => d.id === timerToStop!.deadlineId);
+          if (!deadline && timerToStop?.deadlineId) {
+            try {
+              const docSnap = await getDoc(
+                doc(db, "deadlines", timerToStop.deadlineId),
+              );
+              if (docSnap && docSnap.exists()) {
+                deadline = { id: docSnap.id, ...docSnap.data() } as Deadline;
+              }
+            } catch (e) {
+              console.error("Erro ao buscar prazo de backup:", e);
             }
-          } else {
-            // Reviewer actions
-            if (userProfile.role === UserRole.COORDINATOR) {
-              if (reviewAction === "RETURN") {
-                newState = ReviewState.RETURNED_TO_LAWYER;
-                actionLabel = "RETURNED";
-              } else if (reviewAction === "COMPLETE") {
+          }
+
+          if (deadline && reviewAction) {
+            const isExecutor =
+              deadline.reviewState === undefined ||
+              deadline.reviewState === ReviewState.NONE ||
+              deadline.reviewState === ReviewState.RETURNED_TO_LAWYER;
+
+            const responsibleUserId =
+              deadline.assignedTo || deadline.userId || userProfile.id;
+            const responsibleProfile =
+              teamProfiles.find((t) => t.id === responsibleUserId) || userProfile;
+
+            if (isExecutor && reviewAction === "SUBMIT") {
+              if (responsibleProfile.role === UserRole.LAWYER) {
+                newState = ReviewState.WAITING_COORDINATOR;
+                actionLabel = "SUBMITTED_FOR_REVIEW";
+              } else if (responsibleProfile.role === UserRole.COORDINATOR) {
+                newState = ReviewState.WAITING_ADMIN;
+                actionLabel = "SUBMITTED_FOR_REVIEW";
+              } else if (responsibleProfile.role === UserRole.ADMIN) {
                 newState = ReviewState.COMPLETED;
                 actionLabel = "COMPLETED";
-              } else if (reviewAction === "FORWARD") {
-                newState = ReviewState.WAITING_ADMIN;
-                actionLabel = "SENT_TO_ADMIN";
               }
-            } else if (userProfile.role === UserRole.ADMIN) {
-              if (reviewAction === "RETURN") {
-                newState = ReviewState.RETURNED_TO_LAWYER;
-                actionLabel = "RETURNED";
-              } else if (reviewAction === "COMPLETE") {
-                if (responsibleProfile.role === UserRole.ADMIN) {
+            } else {
+              // Reviewer actions
+              if (userProfile.role === UserRole.COORDINATOR) {
+                if (reviewAction === "RETURN") {
+                  newState = ReviewState.RETURNED_TO_LAWYER;
+                  actionLabel = "RETURNED";
+                } else if (reviewAction === "COMPLETE") {
                   newState = ReviewState.COMPLETED;
                   actionLabel = "COMPLETED";
-                } else {
-                  newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
-                  actionLabel = "ADMIN_APPROVED";
+                } else if (reviewAction === "FORWARD") {
+                  newState = ReviewState.WAITING_ADMIN;
+                  actionLabel = "SENT_TO_ADMIN";
+                }
+              } else if (userProfile.role === UserRole.ADMIN) {
+                if (reviewAction === "RETURN") {
+                  newState = ReviewState.RETURNED_TO_LAWYER;
+                  actionLabel = "RETURNED";
+                } else if (reviewAction === "COMPLETE") {
+                  if (responsibleProfile.role === UserRole.ADMIN) {
+                    newState = ReviewState.COMPLETED;
+                    actionLabel = "COMPLETED";
+                  } else {
+                    newState = ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+                    actionLabel = "ADMIN_APPROVED";
+                  }
                 }
               }
             }
-          }
 
-          if (newState) {
-            const newLogEntry: ReviewLogEntry = {
-              id: Date.now().toString(),
-              userId: userProfile.id,
-              userName: userProfile.name,
-              userRole: userProfile.role,
-              action: actionLabel,
-              fromState: deadline.reviewState || ReviewState.NONE,
-              toState: newState,
-              observation: stopTimerForm.description,
-              timestamp: new Date().toISOString(),
-              durationSeconds: Number(stopTimerForm.durationSeconds),
-            };
+            if (newState) {
+              const newLogEntry: ReviewLogEntry = {
+                id: Date.now().toString(),
+                userId: userProfile.id,
+                userName: userProfile.name,
+                userRole: userProfile.role,
+                action: actionLabel,
+                fromState: deadline.reviewState || ReviewState.NONE,
+                toState: newState,
+                observation: stopTimerForm.description,
+                timestamp: new Date().toISOString(),
+                durationSeconds: Number(stopTimerForm.durationSeconds),
+              };
 
-            const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
+              const updatedLogs = [...(deadline.reviewLogs || []), newLogEntry];
 
-            await updateDoc(doc(db, "deadlines", deadline.id), {
-              reviewState: newState,
-              reviewLogs: updatedLogs,
-              ...(newState === ReviewState.COMPLETED
-                ? { status: DeadlineStatus.COMPLETED }
-                : {}),
-            });
+              await updateDoc(doc(db, "deadlines", deadline.id), {
+                reviewState: newState,
+                reviewLogs: updatedLogs,
+                ...(newState === ReviewState.COMPLETED
+                  ? { status: DeadlineStatus.COMPLETED }
+                  : {}),
+              });
+            }
           }
         }
       }
@@ -8053,36 +8174,106 @@ service cloud.firestore {
                             userProfile?.id || "",
                           );
                           const isMine = m.userId === userProfile?.id;
+                          const isCompleted =
+                            m.status === DeadlineStatus.COMPLETED;
+
+                          let cardClasses = "bg-indigo-50 border-indigo-100 border";
+
+                          if (isCompleted) {
+                            cardClasses =
+                              "bg-emerald-50 border-emerald-100 border";
+                          } else if (isParticipant || isMine) {
+                            cardClasses =
+                              "bg-indigo-50/95 border-indigo-500 border-2 shadow-md font-semibold";
+                          }
 
                           return (
                             <div
                               key={m.id}
-                              className="p-3 rounded-xl transition-all shadow-sm flex flex-col gap-2 bg-indigo-50 border-indigo-100 border relative overflow-hidden cursor-pointer hover:border-indigo-300"
                               onClick={() => {
                                 setView("meetings");
                                 setSelectedMeetingDate(
                                   new Date(m.date + "T00:00:00"),
                                 );
                               }}
+                              className={`p-3 rounded-2xl flex flex-col gap-1 cursor-pointer hover:shadow-md transition-all group relative ${cardClasses}`}
                             >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleMeetingStatus(m);
+                                }}
+                                className={`absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isCompleted ? "bg-emerald-600 text-white" : "bg-white text-slate-300 hover:text-emerald-600 border border-slate-100 shadow-sm"}`}
+                                title={
+                                  isCompleted
+                                    ? "Marcar como pendente"
+                                    : "Concluir"
+                                }
+                              >
+                                <div className="scale-75">
+                                  <Icons.Check />
+                                </div>
+                              </button>
                               <div className="flex justify-between items-start">
-                                <span className="bg-indigo-600 text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1">
+                                <span
+                                  className={`${isCompleted ? "bg-emerald-600" : "bg-indigo-600"} text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1`}
+                                >
                                   <Icons.Users className="w-2 h-2" /> REUNIÃO
                                 </span>
-                                {(isMine || isParticipant) && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                                )}
                               </div>
-                              <div>
-                                <p className="text-xs font-black text-indigo-900 uppercase tracking-tight line-clamp-2">
+                              <div className="flex flex-col">
+                                <span className={`text-[11px] font-bold leading-tight uppercase line-clamp-2 ${isCompleted ? "text-emerald-950" : "text-indigo-900"}`}>
                                   {m.title}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <p className="text-[9px] font-bold text-indigo-600/80 uppercase">
+                                </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <p className={`text-[9px] font-bold uppercase ${isCompleted ? "text-emerald-600" : "text-indigo-600"}`}>
                                     {m.startTime} - {m.endTime}
                                   </p>
                                 </div>
+
+                                {/* Participantes / Responsáveis */}
+                                {m.participantsIds && m.participantsIds.length > 0 && (
+                                  <div className="mt-1 flex flex-col gap-0.5">
+                                    {m.participantsIds.map((pid) => {
+                                      const profile = teamProfiles.find((t) => t.id === pid);
+                                      if (!profile) return null;
+                                      return (
+                                        <span
+                                          key={pid}
+                                          className={`text-[7.5px] font-black uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded border ${
+                                            isCompleted
+                                              ? "text-emerald-600 bg-emerald-100/30 border-emerald-250/30"
+                                              : "text-indigo-600 bg-indigo-50 border-indigo-100"
+                                          }`}
+                                        >
+                                          <Icons.Users
+                                            className={`w-1.5 h-1.5 inline ${isCompleted ? "text-emerald-500" : "text-indigo-500"}`}
+                                          />
+                                          {getFirstName(profile.name)}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
+
+                              {/* Clientes vinculados */}
+                              {m.clientsIds && m.clientsIds.length > 0 && (
+                                <div className="mt-1.5 space-y-0.5">
+                                  {m.clientsIds.map((cid) => {
+                                    const client = clients.find((c) => c.id === cid);
+                                    if (!client) return null;
+                                    return (
+                                      <p
+                                        key={cid}
+                                        className={`text-[8px] font-black truncate uppercase ${isCompleted ? "text-emerald-400" : "text-indigo-400"}`}
+                                      >
+                                        📎 {client.displayName || client.name || "Cliente"}
+                                      </p>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -12280,14 +12471,230 @@ service cloud.firestore {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col h-full">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        Assunto / Descrição
-                      </p>
-                      <p className="text-[13px] font-medium text-slate-700 leading-relaxed italic border-l-4 border-slate-200 pl-3.5 py-1">
-                        {(selectedAppointment.data as AdminTask).description ||
-                          "Nenhuma descrição fornecida."}
-                      </p>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col h-full justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                          Cronômetro de Atividade Administrativa
+                        </p>
+                        {(() => {
+                          const task = selectedAppointment.data as AdminTask;
+                          const activeTimer = activeTimers.find(
+                            (t) => t.deadlineId === task.id,
+                          );
+                          const isPlaying = activeTimer?.isPlaying || false;
+                          const elapsed = activeTimer?.elapsedSeconds || 0;
+
+                          // Display dynamic elapsed time if playing
+                          let displayElapsed = elapsed;
+                          if (isPlaying && activeTimer?.lastStartedAt) {
+                            displayElapsed +=
+                              (Date.now() - activeTimer.lastStartedAt) / 1000;
+                          }
+
+                          const hrs = Math.floor(displayElapsed / 3600);
+                          const mins = Math.floor((displayElapsed % 3600) / 60);
+                          const secs = Math.floor(displayElapsed % 60);
+                          const timeString = `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+                          return (
+                            <div className="flex flex-col items-center gap-4 py-2">
+                              <div className="flex items-center justify-center gap-3">
+                                <span className="font-mono text-3xl font-black text-slate-800 tracking-wider">
+                                  {timeString}
+                                </span>
+                                {isPlaying && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
+                                      Ativo
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2.5 w-full">
+                                {!isPlaying ? (
+                                  <button
+                                    onClick={() =>
+                                      handleStartTimerForAdminTask(task)
+                                    }
+                                    className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest cursor-pointer"
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <polygon points="5 3 19 12 5 21 5 3" />
+                                    </svg>
+                                    INICIAR
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handlePauseTimer(task.id)}
+                                    className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/10 hover:bg-amber-600 hover:scale-[1.01] transition font-black text-[9px] uppercase tracking-widest cursor-pointer"
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <rect width="4" height="16" x="6" y="4" />
+                                      <rect
+                                        width="4"
+                                        height="16"
+                                        x="14"
+                                        y="4"
+                                      />
+                                    </svg>
+                                    PAUSAR
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    handleStopTimer(task.id);
+                                    setIsDetailsModalOpen(false);
+                                  }}
+                                  disabled={!activeTimer}
+                                  className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl transition font-black text-[9px] uppercase tracking-widest ${activeTimer ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:scale-[1.01] cursor-pointer" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <rect
+                                      width="18"
+                                      height="18"
+                                      x="3"
+                                      y="3"
+                                      rx="2"
+                                      ry="2"
+                                    />
+                                  </svg>
+                                  PARAR
+                                </button>
+                              </div>
+
+                              {timerStartError && (
+                                <div className="mt-2 p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 flex items-start gap-2">
+                                  <span className="shrink-0 text-sm">⚠</span>
+                                  <p className="text-[10px] font-bold leading-tight">
+                                    {timerStartError}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* REGISTRO MANUAL DE TEMPO */}
+                              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 flex flex-col gap-2">
+                                <button
+                                  onClick={() =>
+                                    setIsManualInputInDetailsOpen(
+                                      !isManualInputInDetailsOpen,
+                                    )
+                                  }
+                                  type="button"
+                                  className="flex items-center justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition cursor-pointer"
+                                >
+                                  <span>ESQUECEU DE INICIAR O CRONÔMETRO?</span>
+                                  {isManualInputInDetailsOpen && (
+                                    <span className="text-blue-600 font-extrabold flex items-center gap-1">
+                                      Fechar
+                                    </span>
+                                  )}
+                                </button>
+
+                                {isManualInputInDetailsOpen && (
+                                  <div className="space-y-3 pt-1 w-full text-left">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1 col-span-1">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-0.5 text-left">
+                                          Horas
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="0"
+                                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-blue-100 text-center text-slate-800 animate-none"
+                                          value={manualTimerHours}
+                                          onChange={(e) =>
+                                            setManualTimerHours(e.target.value)
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-1 col-span-1">
+                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-0.5 text-left">
+                                          Minutos
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="59"
+                                          placeholder="15"
+                                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-blue-100 text-center text-slate-800 animate-none"
+                                          value={manualTimerMinutes}
+                                          onChange={(e) =>
+                                            setManualTimerMinutes(
+                                              e.target.value,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        const h =
+                                          parseInt(manualTimerHours) || 0;
+                                        const m =
+                                          parseInt(manualTimerMinutes) || 0;
+                                        if (h <= 0 && m <= 0) {
+                                          alert(
+                                            "Por favor, selecione uma duração superior a 0 minutos.",
+                                          );
+                                          return;
+                                        }
+                                        const totalSeconds = h * 3600 + m * 60;
+                                        handleLogManualTimeForAdminTask(
+                                          task,
+                                          totalSeconds,
+                                        );
+
+                                        // Reset manual inputs and close
+                                        setManualTimerHours("");
+                                        setManualTimerMinutes("");
+                                        setIsManualInputInDetailsOpen(false);
+                                        setIsDetailsModalOpen(false);
+                                      }}
+                                      type="button"
+                                      className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 text-white hover:bg-slate-900 transition font-black text-[9px] uppercase tracking-widest shadow-lg shadow-slate-800/10 cursor-pointer"
+                                    >
+                                      LANÇAR TEMPO MANUAL
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>
