@@ -572,6 +572,82 @@ const MonitoringView = ({
   const [selectedProcess, setSelectedProcess] =
     useState<MonitoredProcess | null>(null);
 
+  // Automated background update and bulk update states
+  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
+  const [bulkSyncProgress, setBulkSyncProgress] = useState<{
+    current: number;
+    total: number;
+    activeCnj?: string;
+  }>({ current: 0, total: 0 });
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    const stored = localStorage.getItem("autoSyncProcesses");
+    return stored === null ? true : stored === "true";
+  });
+  const [autoSyncDone, setAutoSyncDone] = useState(false);
+
+  const handleBulkSync = async (processesToSync: MonitoredProcess[]) => {
+    if (isBulkSyncing || processesToSync.length === 0) return;
+    setIsBulkSyncing(true);
+    setBulkSyncProgress({ current: 0, total: processesToSync.length });
+
+    try {
+      for (let i = 0; i < processesToSync.length; i++) {
+        const proc = processesToSync[i];
+        setBulkSyncProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+          activeCnj: proc.cnj,
+        }));
+        
+        try {
+          await onRefresh(proc);
+        } catch (err) {
+          console.error(`Erro ao sincronizar processo ${proc.cnj}:`, err);
+        }
+        
+        if (i < processesToSync.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    } finally {
+      setIsBulkSyncing(false);
+      setBulkSyncProgress({ current: 0, total: 0, activeCnj: undefined });
+    }
+  };
+
+  const handleToggleAutoSync = () => {
+    const newValue = !autoSyncEnabled;
+    setAutoSyncEnabled(newValue);
+    localStorage.setItem("autoSyncProcesses", String(newValue));
+  };
+
+  useEffect(() => {
+    if (!autoSyncEnabled || autoSyncDone || processes.length === 0 || isBulkSyncing) return;
+
+    const runAutoSync = async () => {
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+      const staleProcesses = processes.filter((proc) => {
+        if (!proc.lastUpdate) return true;
+        try {
+          const updateDate = new Date(proc.lastUpdate);
+          return updateDate < twelveHoursAgo;
+        } catch {
+          return true;
+        }
+      });
+
+      if (staleProcesses.length > 0) {
+        setAutoSyncDone(true);
+        // Only run background updates on up to 5 processes at once to be polite
+        await handleBulkSync(staleProcesses.slice(0, 5));
+      } else {
+        setAutoSyncDone(true);
+      }
+    };
+
+    runAutoSync();
+  }, [processes, autoSyncEnabled, autoSyncDone, isBulkSyncing]);
+
   // States for OAB setups
   const [userOab, setUserOab] = useState(userProfile?.oab || "");
   const [userUf, setUserUf] = useState(userProfile?.ufOab || "SP");
@@ -1233,6 +1309,65 @@ const MonitoringView = ({
       {activeTab === "processes" ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="lg:col-span-1 space-y-2 overflow-y-auto max-h-[85vh] pr-2 custom-scrollbar">
+            {/* Painel de Controle de Auto-Sincronização */}
+            <div className="bg-slate-50 border border-slate-200/50 rounded-2xl p-4.5 space-y-4 mb-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
+                    <Icons.RefreshCcw className={`w-3.5 h-3.5 text-blue-600 ${isBulkSyncing ? "animate-spin" : ""}`} />
+                    Sincronização Ativa
+                  </h4>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                    {isBulkSyncing
+                      ? `Atualizando: ${bulkSyncProgress.current}/${bulkSyncProgress.total}`
+                      : `${processes.length} processos monitorados`
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleBulkSync(processes)}
+                  disabled={isBulkSyncing || processes.length === 0}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-black text-[9px] uppercase tracking-wider px-3 py-2.5 rounded-xl transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isBulkSyncing ? "Atualizando..." : "Sincronizar Todos"}
+                </button>
+              </div>
+
+              {isBulkSyncing && (
+                <div className="space-y-1.5 animate-in fade-in duration-200">
+                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-full transition-all duration-300"
+                      style={{ width: `${(bulkSyncProgress.current / bulkSyncProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  {bulkSyncProgress.activeCnj && (
+                    <p className="text-[8px] font-mono text-slate-500 text-center tracking-tight">
+                      Processando CNJ: {bulkSyncProgress.activeCnj}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-black text-slate-800 uppercase tracking-wide">
+                    Auto-sincronia em 2º plano
+                  </span>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight leading-relaxed">
+                    Pesquisa automática ao abrir o painel.
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleAutoSync}
+                  className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none ${autoSyncEnabled ? "bg-emerald-500" : "bg-slate-300"}`}
+                  aria-label="Toggle Auto Sync"
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${autoSyncEnabled ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+              </div>
+            </div>
+
             {processes.length === 0 ? (
               <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
                 <div className="text-slate-300 mb-4 flex justify-center">

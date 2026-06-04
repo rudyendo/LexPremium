@@ -144,6 +144,210 @@ async function startServer() {
     }
   });
 
+  // API Route for bulk updating stale process status and movements via Cron (Automated Background Update)
+  app.get("/api/datajud/update-stale-processes", async (req, res) => {
+    const apiKey = process.env.DATAJUD_API_KEY;
+    const reqSecret = req.query.secret || req.headers["x-cron-secret"];
+    const expectedSecret = process.env.CRON_SECRET || "legal_sync_secret";
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Chave da API Datajud não configurada no servidor." });
+    }
+
+    if (reqSecret !== expectedSecret) {
+      return res.status(401).json({ error: "Não autorizado. Token de segurança inválido." });
+    }
+
+    try {
+      const { initializeApp: adminInitialize, getApps } = await import("firebase-admin/app");
+      const { getFirestore } = await import("firebase-admin/firestore");
+
+      if (getApps().length === 0) {
+        adminInitialize();
+      }
+
+      const db = getFirestore();
+      
+      // Fetch some stale processes that haven't been updated in 12 hours (limit to 5 to prevent timeouts on serverless environments)
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      
+      // Query firebase for processes
+      const collRef = db.collection("monitoredProcesses");
+      const snapshot = await collRef.get();
+      
+      if (snapshot.empty) {
+        return res.json({ message: "Nenhum processo cadastrado para atualização.", updatedCount: 0 });
+      }
+
+      const allProcs = snapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+      
+      // Filter stale processes manually as Firestore queries on strings can be limited without extra indexing
+      const staleProcs = allProcs.filter((p: any) => {
+        if (!p.cnj) return false;
+        if (!p.lastUpdate) return true;
+        return p.lastUpdate < twelveHoursAgo;
+      }).slice(0, 5); // batch size 5
+
+      if (staleProcs.length === 0) {
+        return res.json({ message: "Todos os processos já estão atualizados ou nenhum atende ao critério de desatualização.", updatedCount: 0 });
+      }
+
+      const results = [];
+      const tribunalMapping: Record<string, string> = {
+        "8.26": "tjsp", "8.19": "tjrj", "8.13": "tjmg", "8.07": "tjdft", "8.16": "tjpr",
+        "8.24": "tjsc", "8.21": "tjrs", "8.05": "tjba", "8.06": "tjce", "8.17": "tjpe",
+        "8.18": "tjpi", "8.20": "tjrn", "8.15": "tjpb", "8.02": "tjal", "8.25": "tjse",
+        "8.10": "tjma", "8.01": "tjac", "8.04": "tjam", "8.03": "tjap", "8.14": "tjpa",
+        "8.22": "tjro", "8.23": "tjrr", "8.27": "tjto", "8.09": "tjgo", "8.11": "tjmt",
+        "8.12": "tjms", "8.08": "tjes",
+        "4.01": "trf1", "4.02": "trf2", "4.03": "trf3", "4.04": "trf4", "4.05": "trf5", "4.06": "trf6",
+        "5.01": "trt1", "5.02": "trt2", "5.03": "trt3", "5.04": "trt4", "5.05": "trt5",
+        "5.06": "trt6", "5.07": "trt7", "5.08": "trt8", "5.09": "trt9", "5.10": "trt10",
+        "5.11": "trt11", "5.12": "trt12", "5.13": "trt13", "5.14": "trt14", "5.15": "trt15",
+        "5.16": "trt16", "5.17": "trt17", "5.18": "trt18", "5.19": "trt19", "5.20": "trt20",
+        "5.21": "trt21", "5.22": "trt22", "5.23": "trt23", "5.24": "trt24",
+        "1.00": "stf", "3.00": "tse", "1.03": "stj", "5.00": "tst", "2.00": "stm",
+        "1.01": "cnj", "1.02": "cjf", "1.04": "csjt"
+      };
+
+      for (const proc of staleProcs) {
+        const cleanCnj = proc.cnj.replace(/\D/g, "");
+        if (cleanCnj.length !== 20) continue;
+        
+        const j = cleanCnj.charAt(13);
+        const tr = cleanCnj.substring(14, 16);
+        const tribunalCode = `${j}.${tr}`;
+        const tribunalSuffix = tribunalMapping[tribunalCode];
+
+        if (!tribunalSuffix) {
+          results.push({ cnj: proc.cnj, status: "ignored", reason: "Tribunal não identificado" });
+          continue;
+        }
+
+        try {
+          const authHeader = apiKey.startsWith("APIKey ") ? apiKey : `APIKey ${apiKey}`;
+          const url = `https://api-publica.datajud.cnj.jus.br/api_publica_${tribunalSuffix}/_search`;
+
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Authorization": authHeader,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              query: {
+                bool: {
+                  should: [
+                    { term: { "numeroProcesso.keyword": cleanCnj } },
+                    { match: { numeroProcesso: cleanCnj } }
+                  ],
+                  minimum_should_match: 1
+                }
+              },
+              size: 1
+            })
+          });
+
+          if (!response.ok) {
+            results.push({ cnj: proc.cnj, status: "error", code: response.status });
+            continue;
+          }
+
+          const data: any = await response.json();
+          const hit = data.hits?.hits?.[0]?._source;
+
+          if (!hit) {
+            results.push({ cnj: proc.cnj, status: "not_found" });
+            continue;
+          }
+
+          // Gather parties
+          const getParties = (hitSource: any): string[] => {
+            const list: string[] = [];
+            if (hitSource.poloAtivo) {
+              const polo = Array.isArray(hitSource.poloAtivo) ? hitSource.poloAtivo : [hitSource.poloAtivo];
+              polo.forEach((p: any) => {
+                if (p.sujeito?.nome) list.push(String(p.sujeito.nome).toUpperCase());
+                if (p.representante?.nome) list.push(String(p.representante.nome).toUpperCase());
+              });
+            }
+            if (hitSource.poloPassivo) {
+              const polo = Array.isArray(hitSource.poloPassivo) ? hitSource.poloPassivo : [hitSource.poloPassivo];
+              polo.forEach((p: any) => {
+                if (p.sujeito?.nome) list.push(String(p.sujeito.nome).toUpperCase());
+                if (p.representante?.nome) list.push(String(p.representante.nome).toUpperCase());
+              });
+            }
+            return list;
+          };
+
+          const partyNames = getParties(hit);
+          const cleanParties = partyNames.filter(
+            (name) =>
+              name !== (hit.classe?.nome || "").toUpperCase() &&
+              !(hit.assuntos || []).some(
+                (a: any) => (a.nome || "").toUpperCase() === name
+              )
+          );
+
+          // Standardize movements listing
+          const movements = (hit.movimentos || hit.movimentacao || [])
+            .map((m: any) => ({
+              dataHora: m.dataHora,
+              descricao:
+                m.movimentoNacional?.nome ||
+                m.movimentoNacional?.descricao ||
+                m.movimentoLocal?.nome ||
+                m.movimentoLocal?.descricao ||
+                m.descricao ||
+                m.nome ||
+                m.texto ||
+                m.tipo ||
+                "Sem descrição",
+              complementos:
+                (m.complementos || m.complemento || [])
+                  ?.map((c: any) =>
+                    c.nome
+                      ? `${c.nome}: ${c.valor}`
+                      : c.descricao
+                        ? `${c.descricao}: ${c.valor}`
+                        : c.valor
+                  )
+                  .filter(Boolean) || []
+            }))
+            .sort(
+              (a: any, b: any) =>
+                new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime()
+            );
+
+          // Update process in firestore
+          await collRef.doc(proc.id).update({
+            movements,
+            parties: cleanParties.slice(0, 5),
+            classe: String(hit.classe?.nome || ""),
+            grau: String(hit.grau || ""),
+            lastUpdate: new Date().toISOString(),
+            status: hit.situacaoProcesso || "Ativo"
+          });
+
+          results.push({ cnj: proc.cnj, status: "updated" });
+        } catch (procErr: any) {
+          console.error(`Error background updating CNJ ${proc.cnj}:`, procErr);
+          results.push({ cnj: proc.cnj, status: "failed", error: procErr.message || String(procErr) });
+        }
+      }
+
+      res.json({
+        message: `Fim do processamento em lote de atualização automática.`,
+        processedCount: staleProcs.length,
+        results
+      });
+    } catch (error: any) {
+      console.error("Critical error in automated process sync endpoint:", error);
+      res.status(500).json({ error: "Erro interno ao executar atualização em lote." });
+    }
+  });
+
   // API Route for ComunicaAPI PJe (DJEN) Search by OAB
   app.post("/api/v1/comunicacao", async (req, res) => {
     const { numeroOab, ufOab, dataInicio, dataFim } = req.body;
