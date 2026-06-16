@@ -9267,7 +9267,7 @@ service cloud.firestore {
                                     className="inline-flex px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-lg bg-blue-50 text-blue-700 border border-blue-100 cursor-help tracking-wide shadow-sm"
                                     title={d.empresa}
                                   >
-                                    {d.empresa ? d.empresa.split(" ").slice(0, 2).join(" ") : ""}
+                                    {d.empresa || ""}
                                   </span>
                                 </div>
 
