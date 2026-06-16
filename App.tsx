@@ -3142,6 +3142,7 @@ export default function App() {
   const [deadlinesResponsavelFilter, setDeadlinesResponsavelFilter] =
     useState("Todos");
   const [deadlinesEmpresaFilter, setDeadlinesEmpresaFilter] = useState("Todas");
+  const [deadlinesSectorFilter, setDeadlinesSectorFilter] = useState<Sector | "ALL">("ALL");
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const [adminTasks, setAdminTasks] = useState<AdminTask[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -3183,6 +3184,7 @@ export default function App() {
   const [dashboardCalendarDate, setDashboardCalendarDate] = useState(
     new Date(),
   );
+  const [dashboardSectorFilter, setDashboardSectorFilter] = useState<Sector | "ALL">("ALL");
 
   // Meetings Module States
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -7461,13 +7463,17 @@ export default function App() {
       const matchEmp =
         deadlinesEmpresaFilter === "Todas" ||
         d.empresa === deadlinesEmpresaFilter;
-      return matchSearch && matchResp && matchEmp;
+      const matchSector =
+        deadlinesSectorFilter === "ALL" ||
+        d.sector === deadlinesSectorFilter;
+      return matchSearch && matchResp && matchEmp && matchSector;
     });
   }, [
     pendingDeadlines,
     deadlinesSearch,
     deadlinesResponsavelFilter,
     deadlinesEmpresaFilter,
+    deadlinesSectorFilter,
   ]);
 
   const filteredCompletedDeadlines = useMemo(() => {
@@ -7485,13 +7491,17 @@ export default function App() {
       const matchEmp =
         deadlinesEmpresaFilter === "Todas" ||
         d.empresa === deadlinesEmpresaFilter;
-      return matchSearch && matchResp && matchEmp;
+      const matchSector =
+        deadlinesSectorFilter === "ALL" ||
+        d.sector === deadlinesSectorFilter;
+      return matchSearch && matchResp && matchEmp && matchSector;
     });
   }, [
     completedDeadlines,
     deadlinesSearch,
     deadlinesResponsavelFilter,
     deadlinesEmpresaFilter,
+    deadlinesSectorFilter,
   ]);
 
   const filteredDeadlinesForLink = useMemo(() => {
@@ -8170,57 +8180,91 @@ service cloud.firestore {
                     {getWeekRangeLabel(dashboardCalendarDate)}
                   </p>
                 </div>
-                <div className="flex gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner">
-                  <button
-                    onClick={() => {
-                      const newDate = new Date(dashboardCalendarDate);
-                      newDate.setDate(newDate.getDate() - 7);
-                      setDashboardCalendarDate(newDate);
-                    }}
-                    className="p-2 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-lg border border-slate-100 shadow-sm shrink-0"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                  {userProfile?.role === UserRole.ADMIN && (
+                    <div className="relative group shrink-0 w-full sm:w-auto">
+                      <select
+                        value={dashboardSectorFilter}
+                        onChange={(e) => setDashboardSectorFilter(e.target.value as Sector | "ALL")}
+                        className="w-full sm:w-auto appearance-none bg-slate-50 hover:bg-white border border-slate-200/80 text-slate-700 hover:text-slate-900 px-4 py-2.5 pr-10 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all cursor-pointer shadow-sm min-w-[200px]"
+                      >
+                        <option value="ALL">TODOS OS SETORES</option>
+                        {Object.values(Sector).map((sec) => (
+                          <option key={sec} value={sec}>
+                            {sec}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 group-hover:text-slate-600 transition-colors">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shadow-inner w-full sm:w-auto justify-between sm:justify-start">
+                    <button
+                      onClick={() => {
+                        const newDate = new Date(dashboardCalendarDate);
+                        newDate.setDate(newDate.getDate() - 7);
+                        setDashboardCalendarDate(newDate);
+                      }}
+                      className="p-2 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-lg border border-slate-100 shadow-sm shrink-0"
                     >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setDashboardCalendarDate(new Date())}
-                    className="px-4 py-2 bg-white text-slate-900 rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all border border-slate-100 shadow-sm"
-                  >
-                    Hoje
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newDate = new Date(dashboardCalendarDate);
-                      newDate.setDate(newDate.getDate() + 7);
-                      setDashboardCalendarDate(newDate);
-                    }}
-                    className="p-2 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-lg border border-slate-100 shadow-sm shrink-0"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setDashboardCalendarDate(new Date())}
+                      className="px-4 py-2 bg-white text-slate-900 rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all border border-slate-100 shadow-sm flex-1 sm:flex-initial text-center"
                     >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </button>
+                      Hoje
+                    </button>
+                    <button
+                      onClick={() => {
+                        const newDate = new Date(dashboardCalendarDate);
+                        newDate.setDate(newDate.getDate() + 7);
+                        setDashboardCalendarDate(newDate);
+                      }}
+                      className="p-2 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-lg border border-slate-100 shadow-sm shrink-0"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -8228,6 +8272,9 @@ service cloud.firestore {
                 {getDaysInWeek(dashboardCalendarDate).map((day) => {
                   const dayStr = formatDateToISO(day);
                   const filteredDeadlines = deadlines.filter((d) => {
+                    if (dashboardSectorFilter !== "ALL" && d.sector !== dashboardSectorFilter) {
+                      return false;
+                    }
                     if (userProfile?.role === UserRole.ADMIN) return true;
                     if (
                       userProfile?.role === UserRole.COORDINATOR &&
@@ -8252,6 +8299,9 @@ service cloud.firestore {
                     );
 
                   const filteredAdminTasks = adminTasks.filter((t) => {
+                    if (dashboardSectorFilter !== "ALL" && t.sector !== dashboardSectorFilter) {
+                      return false;
+                    }
                     if (userProfile?.role === UserRole.ADMIN) return true;
                     if (
                       userProfile?.role === UserRole.COORDINATOR &&
@@ -8275,7 +8325,10 @@ service cloud.firestore {
                       (a.time || "00:00").localeCompare(b.time || "00:00"),
                     );
                   const dayMeetings = meetings
-                    .filter((m) => m.date === dayStr)
+                    .filter((m) => {
+                      if (dashboardSectorFilter !== "ALL") return false;
+                      return m.date === dayStr;
+                    })
                     .sort((a, b) => a.startTime.localeCompare(b.startTime));
                   const isToday = formatDateToISO(new Date()) === dayStr;
 
@@ -9035,10 +9088,10 @@ service cloud.firestore {
         {view === "deadlines" && (
           <div className="space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500">
             {/* CONTROLES E BUSCA */}
-            <div className="bg-white rounded-3xl p-4 md:p-6 shadow-xl border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="w-full flex flex-col sm:flex-row items-center gap-3 flex-1">
+            <div className="bg-white rounded-3xl p-4 md:p-6 shadow-xl border border-slate-100 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+              <div className="w-full flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3.5 flex-1">
                 {/* Busca rápida */}
-                <div className="relative w-full sm:max-w-xs">
+                <div className="relative w-full sm:max-w-[280px]">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                     <Icons.Search className="w-4 h-4" />
                   </span>
@@ -9060,8 +9113,8 @@ service cloud.firestore {
                 </div>
 
                 {/* Filtro do Advogado */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">
                     Advogado:
                   </span>
                   <select
@@ -9069,7 +9122,7 @@ service cloud.firestore {
                     onChange={(e) =>
                       setDeadlinesResponsavelFilter(e.target.value)
                     }
-                    className="w-full sm:w-auto py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full sm:w-auto sm:max-w-[180px] py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
                   >
                     {uniqResponsaveis.map((item) => (
                       <option key={item} value={item}>
@@ -9080,18 +9133,37 @@ service cloud.firestore {
                 </div>
 
                 {/* Filtro da Empresa */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">
                     Cliente:
                   </span>
                   <select
                     value={deadlinesEmpresaFilter}
                     onChange={(e) => setDeadlinesEmpresaFilter(e.target.value)}
-                    className="w-full sm:w-auto py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 select-ellipsis"
+                    className="w-full sm:w-auto sm:max-w-[240px] py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
                   >
                     {uniqEmpresas.map((item) => (
                       <option key={item} value={item}>
                         {item === "Todas" ? "TODAS EMPRESAS" : item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Setor */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">
+                    Setor:
+                  </span>
+                  <select
+                    value={deadlinesSectorFilter}
+                    onChange={(e) => setDeadlinesSectorFilter(e.target.value as Sector | "ALL")}
+                    className="w-full sm:w-auto sm:max-w-[180px] py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                  >
+                    <option value="ALL">TODOS OS SETORES</option>
+                    {Object.values(Sector).map((sec) => (
+                      <option key={sec} value={sec}>
+                        {sec}
                       </option>
                     ))}
                   </select>
@@ -9106,7 +9178,7 @@ service cloud.firestore {
                 ...filteredCompletedDeadlines,
               ];
               return (
-                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                <div className="Tabela-de-Trabalho-Executiva bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
                   <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icons.Table className="w-5 h-5 text-white" />
@@ -9120,45 +9192,40 @@ service cloud.firestore {
                   </div>
                   {combinedDeadlinesForTable.length > 0 ? (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            <th className="py-3.5 px-4 text-center w-12">
-                              Status
-                            </th>
-                            <th className="py-3.5 px-4">
-                              Peça Processual / Assunto
-                            </th>
-                            <th className="py-3.5 px-4">Cliente / Empresa</th>
-                            <th className="py-3.5 px-4">Responsável</th>
-                            <th className="py-3.5 px-4">Vencimento</th>
-                            <th className="py-3.5 px-4 text-center w-36">
-                              Ações
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-xs">
+                      <div className="min-w-[900px] lg:min-w-0">
+                        {/* Grid Header */}
+                        <div className="grid grid-cols-[60px_2.5fr_1.5fr_1.2fr_1.5fr_144px] items-center gap-4 px-6 py-4 bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">
+                          <div className="text-center">Status</div>
+                          <div>Peça Processual / Assunto</div>
+                          <div>Cliente / Empresa</div>
+                          <div>Responsável</div>
+                          <div>Vencimento</div>
+                          <div className="text-center">Ações</div>
+                        </div>
+
+                        {/* Grid Rows / List */}
+                        <div className="divide-y divide-slate-100">
                           {combinedDeadlinesForTable.map((d) => {
                             const isCompleted =
                               d.status === DeadlineStatus.COMPLETED;
                             const daysDiff = getDaysDiff(d.data);
                             return (
-                              <tr
+                              <div
                                 key={d.id}
-                                className={`group hover:bg-slate-50/50 transition-colors ${
+                                className={`grid grid-cols-[60px_2.5fr_1.5fr_1.2fr_1.5fr_144px] items-center gap-4 px-6 py-5 group hover:bg-slate-50/50 transition-colors ${
                                   isCompleted
-                                    ? "bg-slate-50/30 text-slate-500"
+                                    ? "bg-slate-50/20 text-slate-500"
                                     : ""
                                 }`}
                               >
                                 {/* Alternar Status */}
-                                <td className="py-3 px-4 text-center">
+                                <div className="flex justify-center">
                                   <button
                                     onClick={() => toggleStatus(d)}
-                                    className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all border ${
+                                    className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all border ${
                                       isCompleted
-                                        ? "bg-emerald-100 border-emerald-300 text-emerald-700"
-                                        : "bg-white border-slate-200 hover:border-blue-500 text-slate-400"
+                                        ? "bg-emerald-100 border-emerald-300 text-emerald-700 shadow-sm"
+                                        : "bg-white border-slate-200 hover:border-blue-500 hover:shadow-sm text-slate-400"
                                     }`}
                                     title={
                                       isCompleted
@@ -9167,121 +9234,120 @@ service cloud.firestore {
                                     }
                                   >
                                     {isCompleted ? (
-                                      <Icons.Check className="w-3.5 h-3.5" />
+                                      <Icons.Check className="w-4 h-4 stroke-[3]" />
                                     ) : (
-                                      <span className="w-2 h-2 rounded bg-slate-300 group-hover:bg-blue-500 transition-colors" />
+                                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors" />
                                     )}
                                   </button>
-                                </td>
+                                </div>
 
                                 {/* Peça / Assunto */}
-                                <td className="py-3 px-4">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-extrabold text-slate-900 uppercase tracking-tight text-xs">
+                                <div className="flex flex-col gap-1 pr-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-extrabold text-slate-900 group-hover:text-blue-700 transition-colors text-[13.5px] tracking-tight uppercase leading-snug">
                                       {d.peca}
                                     </span>
-                                    <span className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase bg-slate-100 text-slate-600">
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full font-black uppercase bg-slate-100 text-slate-600 border border-slate-200/50 leading-none">
                                       {d.sector || "GERAL"}
                                     </span>
                                   </div>
                                   {d.assunto && (
                                     <p
-                                      className="text-[11px] text-slate-500 leading-wider font-medium line-clamp-1 italic mt-0.5"
+                                      className="text-xs text-slate-500 leading-relaxed font-semibold italic line-clamp-2"
                                       title={d.assunto}
                                     >
                                       "{d.assunto}"
                                     </p>
                                   )}
-                                </td>
+                                </div>
 
                                 {/* Cliente / Empresa */}
-                                <td className="py-3 px-4">
-                                  <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded bg-blue-50 text-blue-700 border border-blue-100">
-                                    {d.empresa}
+                                <div className="pr-2">
+                                  <span
+                                    className="inline-flex px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-lg bg-blue-50 text-blue-700 border border-blue-100 cursor-help tracking-wide shadow-sm"
+                                    title={d.empresa}
+                                  >
+                                    {d.empresa ? d.empresa.split(" ").slice(0, 2).join(" ") : ""}
                                   </span>
-                                </td>
+                                </div>
 
                                 {/* Responsável */}
-                                <td className="py-3 px-4 font-black text-slate-500 uppercase text-[9px]">
+                                <div className="font-extrabold text-slate-600 uppercase text-[10px] tracking-wider pr-2">
                                   {d.responsavel}
-                                </td>
+                                </div>
 
                                 {/* Vencimento */}
-                                <td className="py-3 px-4">
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-800 text-xs">
-                                      {formatLocalDate(d.data)}{" "}
-                                      {d.hora && (
-                                        <span className="text-blue-600 text-[10px] ml-0.5 font-bold">
-                                          às {d.hora}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span
-                                      className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${
-                                        isCompleted
-                                          ? "text-emerald-600"
-                                          : daysDiff <= 1
-                                            ? "text-red-500"
-                                            : "text-slate-400"
-                                      }`}
-                                    >
-                                      {isCompleted
-                                        ? "CONCLUÍDO"
-                                        : `${daysDiff} dias`}
-                                    </span>
-                                  </div>
-                                </td>
+                                <div className="flex flex-col pr-2">
+                                  <span className="font-extrabold text-slate-800 text-[13.5px] tracking-tight flex items-center gap-1.5 leading-none">
+                                    {formatLocalDate(d.data)}
+                                    {d.hora && (
+                                      <span className="bg-blue-50/80 text-blue-700 border border-blue-100/50 text-[10px] px-1.5 py-0.5 rounded font-black tracking-wide">
+                                        {d.hora}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span
+                                    className={`text-[9px] font-black uppercase tracking-widest mt-1.5 self-start px-2 py-0.5 rounded-full ${
+                                      isCompleted
+                                        ? "bg-emerald-50 text-emerald-600 border border-emerald-100/60"
+                                        : daysDiff <= 1
+                                          ? "bg-red-50 text-red-600 border border-red-100/60 animate-pulse"
+                                          : daysDiff <= 3
+                                            ? "bg-amber-50 text-amber-600 border border-amber-100/60"
+                                            : "bg-slate-50 text-slate-600 border border-slate-200/50"
+                                    }`}
+                                  >
+                                    {isCompleted ? "CONCLUÍDO" : `${daysDiff} dias`}
+                                  </span>
+                                </div>
 
                                 {/* Ações */}
-                                <td className="py-3 px-4 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      onClick={() => handleSendToReview(d)}
-                                      className="p-1 bg-blue-50 text-blue-600 hover:text-white hover:bg-blue-600 rounded-md transition-all shadow-sm"
-                                      title="Enviar p/ Revisão"
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => handleSendToReview(d)}
+                                    className="p-1.5 bg-blue-50 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition-all shadow-sm border border-blue-100"
+                                    title="Enviar para Revisão"
+                                  >
+                                    <Icons.Review className="w-3.5 h-3.5" />
+                                  </button>
+                                  {d.documentUrl && (
+                                    <a
+                                      href={d.documentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 bg-slate-50 text-slate-600 hover:text-white hover:bg-slate-600 rounded-lg transition-all shadow-sm border border-slate-200"
+                                      title="Ver Link do Documento"
                                     >
-                                      <Icons.Review className="w-3.5 h-3.5" />
-                                    </button>
-                                    {d.documentUrl && (
-                                      <a
-                                        href={d.documentUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-1 bg-slate-50 text-slate-600 hover:text-white hover:bg-slate-600 rounded-md transition-all shadow-sm"
-                                        title="Ver Link do Documento"
-                                      >
-                                        <Icons.ExternalLink className="w-3.5 h-3.5" />
-                                      </a>
-                                    )}
-                                    <button
-                                      onClick={() => handleEditClick(d)}
-                                      className="p-1 bg-amber-50 text-amber-600 hover:text-white hover:bg-amber-500 rounded-md transition-all shadow-sm"
-                                      title="Editar"
-                                    >
-                                      <Icons.Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (
-                                          window.confirm(
-                                            "Remover prazo definitivamente?",
-                                          )
+                                      <Icons.ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() => handleEditClick(d)}
+                                    className="p-1.5 bg-amber-50 text-amber-600 hover:text-white hover:bg-amber-500 rounded-lg transition-all shadow-sm border border-amber-100"
+                                    title="Editar"
+                                  >
+                                    <Icons.Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          "Remover prazo definitivamente?",
                                         )
-                                          deleteDeadline(d.id);
-                                      }}
-                                      className="p-1 bg-red-50 text-red-600 hover:text-white hover:bg-red-600 rounded-md transition-all shadow-sm"
-                                      title="Excluir"
-                                    >
-                                      <Icons.Trash className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
+                                      )
+                                        deleteDeadline(d.id);
+                                    }}
+                                    className="p-1.5 bg-red-50 text-red-600 hover:text-white hover:bg-red-600 rounded-lg transition-all shadow-sm border border-red-100"
+                                    title="Excluir"
+                                  >
+                                    <Icons.Trash className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
                             );
                           })}
-                        </tbody>
-                      </table>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="p-12 text-center text-slate-400 font-bold uppercase text-[9px] tracking-widest">
