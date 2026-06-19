@@ -28,7 +28,8 @@ export enum Sector {
   CIVIL = 'CÍVEL',
   BIDDING = 'LICITAÇÕES',
   LABOR = 'TRABALHISTA',
-  GENERAL = 'GERAL'
+  GENERAL = 'GERAL',
+  IT = 'TECNOLOGIA DA INFORMAÇÃO'
 }
 
 export interface OfficeMember {

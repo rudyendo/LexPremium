@@ -2891,6 +2891,9 @@ const Sidebar = ({
           { id: "team", label: "Equipe", icon: <Icons.Users /> },
           { id: "settings", label: "Configurações", icon: <Icons.Settings /> },
         ].filter((item) => {
+          if (userProfile?.sector === Sector.IT) {
+            return ["dashboard", "agenda", "deadlines", "timesheet", "settings"].includes(item.id);
+          }
           if (item.id === "team") {
             return (
               userProfile?.role === UserRole.ADMIN ||
