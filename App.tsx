@@ -9455,8 +9455,8 @@ service cloud.firestore {
             {/* Main Schedule Workspace Container */}
             <div className="bg-white rounded-3xl shadow-xl border border-slate-100/80 overflow-hidden p-6 md:p-8">
               {/* Header section with Filter and Scheduler Controls */}
-              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-100 font-sans">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between xl:justify-start gap-6 flex-grow">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-100 font-sans">
+                <div className="flex flex-col md:flex-row md:items-center justify-between xl:justify-start gap-6 flex-grow">
                   <div>
                     <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block mb-1">
                       Agenda de Reservas
@@ -9464,6 +9464,9 @@ service cloud.firestore {
                     <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
                       Reservas da Sala de Reuniões
                     </h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
+                      {getWeekRangeLabel(selectedMeetingDate)}
+                    </p>
                   </div>
 
                   {/* Enhanced Search Bar */}
@@ -9489,326 +9492,333 @@ service cloud.firestore {
                   </div>
                 </div>
 
-                {/* Week Strips & Dynamic Date Picker */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner">
-                    <button
-                      onClick={() => {
-                        const newDate = new Date(selectedMeetingDate);
-                        newDate.setDate(newDate.getDate() - 1);
-                        setSelectedMeetingDate(newDate);
-                      }}
-                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all hover:shadow-sm"
+                {/* Week Navigation Controls */}
+                <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner w-full lg:w-auto justify-between lg:justify-start">
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedMeetingDate);
+                      newDate.setDate(newDate.getDate() - 7);
+                      setSelectedMeetingDate(newDate);
+                    }}
+                    className="p-2.5 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-xl border border-slate-100 shadow-sm shrink-0"
+                    title="Semana anterior"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m15 18-6-6 6-6" />
-                      </svg>
-                    </button>
-
-                    {/* Quick Week Strips Selection */}
-                    <div className="hidden md:flex items-center gap-1">
-                      {(() => {
-                        const start = new Date(selectedMeetingDate);
-                        const day = start.getDay();
-                        const diff =
-                          start.getDate() - (day === 0 ? 6 : day - 1);
-                        const monday = new Date(start.setDate(diff));
-                        return Array.from({ length: 6 }).map((_, i) => {
-                          const itemDay = new Date(monday);
-                          itemDay.setDate(monday.getDate() + i);
-                          const isSel =
-                            formatDateToISO(itemDay) ===
-                            formatDateToISO(selectedMeetingDate);
-                          return (
-                            <button
-                              key={i}
-                              onClick={() => setSelectedMeetingDate(itemDay)}
-                              className={`px-3.5 py-2 rounded-xl text-center min-w-[56px] transition-all flex flex-col items-center ${isSel ? "bg-[#0F172A] text-white shadow-md shadow-slate-900/15" : "hover:bg-white hover:shadow-sm text-slate-500"}`}
-                            >
-                              <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
-                                {itemDay
-                                  .toLocaleDateString("pt-BR", {
-                                    weekday: "short",
-                                  })
-                                  .replace(".", "")}
-                              </span>
-                              <span className="text-xs font-black mt-0.5">
-                                {itemDay.getDate()}
-                              </span>
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-
-                    <span className="md:hidden font-black text-slate-900 min-w-[90px] text-center uppercase tracking-widest text-xs">
-                      {selectedMeetingDate
-                        .toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                        })
-                        .replace(".", "")}
-                    </span>
-
-                    <button
-                      onClick={() => {
-                        const newDate = new Date(selectedMeetingDate);
-                        newDate.setDate(newDate.getDate() + 1);
-                        setSelectedMeetingDate(newDate);
-                      }}
-                      className="p-2.5 text-slate-400 hover:text-slate-950 hover:bg-white rounded-xl transition-all hover:shadow-sm"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </button>
-                  </div>
-
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                  </button>
                   <button
                     onClick={() => setSelectedMeetingDate(new Date())}
-                    className="px-5 py-3 bg-[#0F172A]/5 text-[#0F172A] font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-[#0F172A]/10 transition-all text-center border border-slate-200/50 hover:shadow-sm"
+                    className="px-5 py-2.5 bg-white text-slate-900 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all border border-slate-100 shadow-sm flex-1 lg:flex-initial text-center"
                   >
                     Hoje
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedMeetingDate);
+                      newDate.setDate(newDate.getDate() + 7);
+                      setSelectedMeetingDate(newDate);
+                    }}
+                    className="p-2.5 text-slate-400 hover:text-blue-600 transition-all bg-white rounded-xl border border-slate-100 shadow-sm shrink-0"
+                    title="Próxima semana"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
                   </button>
                 </div>
               </div>
 
-              {/* Master Elegant Agenda Stream / Timetable */}
-              <div className="space-y-6 relative border-l-2 border-slate-100 pl-6 md:pl-10 ml-4 py-2">
-                {filteredMeetings
-                  .map((meeting) => {
-                    const isParticipant = meeting.participantsIds.includes(
-                      userProfile?.id || "",
-                    );
-                    const isMine = meeting.userId === userProfile?.id;
-                    const isCompleted =
-                      meeting.status === DeadlineStatus.COMPLETED;
-                    const hasClients = (meeting.clientsIds?.length ?? 0) > 0;
+              {/* Master Weekly Calendar Grid - Fully Responsive */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-2 md:gap-2.5">
+                {getDaysInWeek(selectedMeetingDate).map((day) => {
+                  const dayStr = formatDateToISO(day);
+                  const isToday = formatDateToISO(new Date()) === dayStr;
+                  const isDaySelected = formatDateToISO(selectedMeetingDate) === dayStr;
 
-                    // Compute dynamic sidebar border color reflecting the participants structure
-                    const statusBorderClass = isMine
-                      ? "border-l-4 border-l-blue-600"
-                      : hasClients
-                        ? "border-l-4 border-l-emerald-500"
-                        : "border-l-4 border-l-slate-400";
+                  // Filter meetings for this specific day of the week with search query if active
+                  const dayMeetings = meetings
+                    .filter((m) => {
+                      const matchDate = m.date === dayStr;
+                      if (!matchDate) return false;
+                      if (!meetingsSearch.trim()) return true;
+                      const search = meetingsSearch.trim().toLowerCase();
+                      const titleMatch = (m.title || "").toLowerCase().includes(search);
+                      const descMatch = (m.description || "").toLowerCase().includes(search);
+                      const timeMatch =
+                        (m.startTime || "").toLowerCase().includes(search) ||
+                        (m.endTime || "").toLowerCase().includes(search) ||
+                        `${m.startTime} às ${m.endTime}`.toLowerCase().includes(search);
 
-                    return (
-                      <div
-                        key={meeting.id}
-                        className={`group relative bg-white rounded-2xl border border-slate-150 ${statusBorderClass} hover:border-slate-300 transition-all p-6 shadow-sm hover:shadow-md duration-300`}
-                      >
-                        {/* Timeline node */}
-                        <div className={`absolute -left-[31px] md:-left-[47px] top-8 w-4 h-4 rounded-full border-4 border-white ${isMine ? "bg-blue-600" : hasClients ? "bg-emerald-500" : "bg-slate-400"} ring-2 ring-slate-100 group-hover:scale-110 transition-transform`} />
+                      const participantMatch = m.participantsIds.some((pid) => {
+                        const prof = teamProfiles.find((p) => p.id === pid);
+                        return prof?.name?.toLowerCase().includes(search) || prof?.role?.toLowerCase().includes(search);
+                      });
 
-                        <div className="flex flex-col lg:flex-row justify-between items-stretch gap-6">
-                          {/* Left Panel: Fine-Tuned Time Indicator Column */}
-                          <div className="flex-shrink-0 flex lg:flex-col items-start justify-center lg:justify-start lg:w-28 bg-slate-50 border border-slate-100 p-3 rounded-xl text-slate-850 font-sans">
-                            {meetingsSearch.trim() && (
-                              <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest block mb-1">
-                                {formatLocalDate(meeting.date)}
-                              </span>
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              <Icons.Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span className="text-base font-black text-slate-900 tracking-tight leading-none">
-                                {meeting.startTime}
-                              </span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block lg:mt-1.5 ml-5 lg:ml-0">
-                              fim {meeting.endTime}
+                      const clientMatch = m.clientsIds?.some((cid) => {
+                        const client = clients.find((c) => c.id === cid);
+                        return client?.displayName?.toLowerCase().includes(search) || client?.name?.toLowerCase().includes(search);
+                      });
+
+                      return titleMatch || descMatch || timeMatch || participantMatch || clientMatch;
+                    })
+                    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                  return (
+                    <div
+                      key={dayStr}
+                      className={`p-1.5 md:p-2 rounded-2xl border transition-all flex flex-col gap-3 min-h-[350px] ${isToday ? "bg-slate-50 border-blue-200 ring-4 ring-blue-50" : isDaySelected ? "bg-slate-50/40 border-slate-300" : "bg-white border-slate-100"}`}
+                      onClick={() => setSelectedMeetingDate(day)}
+                    >
+                      {/* Day Header */}
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100 px-1">
+                        <div className="text-left">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                            {day.toLocaleDateString("pt-BR", {
+                              weekday: "short",
+                            }).replace(".", "")}
+                          </p>
+                          <p
+                            className={`text-xl font-black mt-1.5 ${isToday ? "text-blue-600" : "text-slate-900"}`}
+                          >
+                            {day.getDate()}
+                          </p>
+                        </div>
+
+                        {/* Quick Booking Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingMeetingId(null);
+                            setNewMeetingForm({
+                              title: "",
+                              description: "",
+                              date: dayStr,
+                              startTime: "09:00",
+                              endTime: "10:00",
+                              participantsIds: [userProfile?.id || ""],
+                              clientsIds: [],
+                              alerts: ["ON_TIME"],
+                            });
+                            setIsNewMeetingModalOpen(true);
+                          }}
+                          className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                          title="Reservar neste dia"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 12h14" />
+                            <path d="M12 5v14" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Day Meetings List */}
+                      <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar py-1">
+                        {dayMeetings.length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center py-12 text-slate-300 gap-1.5 opacity-60">
+                            <Icons.Calendar className="w-5 h-5" />
+                            <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-400">
+                              Livre
                             </span>
                           </div>
+                        ) : (
+                          dayMeetings.map((meeting) => {
+                            const isParticipant = meeting.participantsIds.includes(
+                              userProfile?.id || "",
+                            );
+                            const isMine = meeting.userId === userProfile?.id;
+                            const isCompleted = meeting.status === DeadlineStatus.COMPLETED;
+                            const hasClients = (meeting.clientsIds?.length ?? 0) > 0;
 
-                          {/* Central Panel: Meeting Subject & Notes Details */}
-                          <div className="flex-grow space-y-4 font-sans">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4
-                                className={`text-base font-extrabold tracking-tight ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}
+                            let cardClasses = "bg-slate-50 border-slate-200/80 hover:border-slate-300";
+                            if (isCompleted) {
+                              cardClasses = "bg-emerald-50/80 border-emerald-200/60";
+                            } else if (isParticipant || isMine) {
+                              cardClasses = "bg-blue-50/70 border-blue-200/80 hover:border-blue-300";
+                            }
+
+                            return (
+                              <div
+                                key={meeting.id}
+                                className={`p-2.5 rounded-xl border flex flex-col gap-2 cursor-pointer hover:shadow-sm transition-all group relative ${cardClasses}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedMeetingDate(day);
+                                }}
                               >
-                                {meeting.title}
-                              </h4>
-                              {isMine && (
-                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase tracking-widest rounded border border-blue-100">
-                                  Organizador
-                                </span>
-                              )}
-                              {isParticipant && !isMine && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[8px] font-black uppercase tracking-widest rounded border border-slate-200">
-                                  Convidado
-                                </span>
-                              )}
-                            </div>
+                                {/* Check Status Button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleMeetingStatus(meeting);
+                                  }}
+                                  className={`absolute top-2 right-2 w-5 h-5 rounded-md flex items-center justify-center transition-all ${isCompleted ? "bg-emerald-600 text-white" : "bg-white text-slate-300 hover:text-emerald-600 border border-slate-200 shadow-sm"}`}
+                                  title={isCompleted ? "Marcar como pendente" : "Concluir"}
+                                >
+                                  <div className="scale-[0.7]">
+                                    <Icons.Check />
+                                  </div>
+                                </button>
 
-                            {meeting.description && (
-                              <div className="bg-slate-50/55 border-l-2 border-slate-200 pl-4 py-2 rounded-r-xl max-w-4xl">
-                                <p className="text-xs font-semibold text-slate-600 leading-relaxed italic">
-                                  {meeting.description}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Beautiful Grid Layout for Team and Clients */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 mt-1">
-                              <div>
-                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-2">
-                                  Colegas do Escritório
-                                </span>
-                                <div className="flex flex-wrap gap-2">
-                                  {meeting.participantsIds.map((pid) => {
-                                    const prof = teamProfiles.find(
-                                      (p) => p.id === pid,
-                                    );
-                                    if (!prof) return null;
-                                    const initials = prof.name
-                                      ? prof.name
-                                          .split(" ")
-                                          .slice(0, 2)
-                                          .map((n) => n[0])
-                                          .join("")
-                                          .toUpperCase()
-                                      : "?";
-                                    return (
-                                      <div
-                                        key={pid}
-                                        className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/50 rounded-xl py-1.5 px-3 hover:bg-slate-100 transition-colors cursor-default"
-                                        title={prof.role}
-                                      >
-                                        <div className="w-6 h-6 rounded-full bg-slate-900 text-white font-black text-[9px] flex items-center justify-center shrink-0">
-                                          {initials}
-                                        </div>
-                                        <div className="flex flex-col">
-                                          <span className="text-[10px] font-black text-slate-850 leading-none">
-                                            {prof.name}
-                                          </span>
-                                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                            {prof.role}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-
-                              {hasClients && (
-                                <div>
-                                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-2">
-                                    Clientes Representados
+                                {/* Meeting Type Pill Badge */}
+                                <div className="flex justify-between items-start">
+                                  <span
+                                    className={`${isCompleted ? "bg-emerald-600" : isParticipant || isMine ? "bg-blue-600" : "bg-slate-600"} text-white rounded font-black uppercase text-[7px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1`}
+                                  >
+                                    <Icons.Users className="w-1.5 h-1.5" /> REUNIÃO
                                   </span>
-                                  <div className="flex flex-wrap gap-2">
+                                </div>
+
+                                {/* Title & Description */}
+                                <div className="flex flex-col gap-0.5">
+                                  <span
+                                    className={`text-xs font-black leading-tight uppercase ${isCompleted ? "text-emerald-950 line-through opacity-70" : "text-slate-850"}`}
+                                  >
+                                    {meeting.title}
+                                  </span>
+                                  {meeting.description && (
+                                    <span className="text-[9px] text-slate-500 font-medium italic line-clamp-2 mt-0.5 leading-snug">
+                                      {meeting.description}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Time Badge */}
+                                <div className="flex items-center gap-1">
+                                  <Icons.Clock className="w-3 h-3 text-slate-400" />
+                                  <span className="text-[9px] font-black text-slate-700">
+                                    {meeting.startTime} - {meeting.endTime}
+                                  </span>
+                                </div>
+
+                                {/* Participants styled as beautiful full-width horizontal pill blocks */}
+                                {meeting.participantsIds && meeting.participantsIds.length > 0 && (
+                                  <div className="mt-1 flex flex-col gap-1">
+                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                                      Participantes
+                                    </span>
+                                    <div className="flex flex-col gap-1">
+                                      {meeting.participantsIds.map((pid) => {
+                                        const prof = teamProfiles.find((p) => p.id === pid);
+                                        if (!prof) return null;
+                                        return (
+                                          <div
+                                            key={pid}
+                                            className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
+                                              isCompleted
+                                                ? "text-emerald-700 bg-emerald-100/30 border-emerald-250/20"
+                                                : isParticipant || isMine
+                                                  ? "text-blue-700 bg-blue-100/30 border-blue-200/20"
+                                                  : "text-slate-700 bg-slate-100/30 border-slate-200/20"
+                                            }`}
+                                            title={`${prof.name} (${prof.role})`}
+                                          >
+                                            <Icons.Users
+                                              className={`w-1.5 h-1.5 inline ${
+                                                isCompleted
+                                                  ? "text-emerald-500"
+                                                  : isParticipant || isMine
+                                                    ? "text-blue-500"
+                                                    : "text-slate-400"
+                                              }`}
+                                            />
+                                            <span className="truncate">{getFirstName(prof.name)}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Clients representado */}
+                                {hasClients && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
                                     {meeting.clientsIds?.map((cid) => {
-                                      const client = clients.find(
-                                        (c) => c.id === cid,
-                                      );
+                                      const client = clients.find((c) => c.id === cid);
                                       if (!client) return null;
                                       return (
-                                        <div
+                                        <span
                                           key={cid}
-                                          className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl py-1.5 px-3 hover:bg-emerald-100/70 transition-colors cursor-default"
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[7.5px] font-extrabold uppercase truncate max-w-full ${isCompleted ? "bg-emerald-100/40 text-emerald-850 border border-emerald-200/50" : "bg-blue-50/60 text-blue-700 border border-blue-100"}`}
+                                          title={client.displayName}
                                         >
-                                          <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
-                                            <Icons.Users className="w-3.5 h-3.5 text-white" />
-                                          </div>
-                                          <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-emerald-950 leading-none">
-                                              {client.displayName}
-                                            </span>
-                                            <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">
-                                              Cliente
-                                            </span>
-                                          </div>
-                                        </div>
+                                          <Icons.Users className="w-1.5 h-1.5" />
+                                          <span className="truncate">{client.displayName}</span>
+                                        </span>
                                       );
                                     })}
                                   </div>
-                                </div>
-                              )}
-                            </div>
+                                )}
 
-                            {/* Symmetrical Alarm Notifications Badge Banner */}
-                            {meeting.alerts && meeting.alerts.length > 0 && (
-                              <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 text-[9px] font-black uppercase text-amber-600 tracking-widest">
-                                <Icons.Bell className="w-3.5 h-3.5" />
-                                <span>Avisos ativos:</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {meeting.alerts.map((al) => (
-                                    <span
-                                      key={al}
-                                      className="bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded-lg text-[8px] text-amber-800 font-extrabold"
-                                    >
-                                      {al === "ON_TIME" ? "No horário" : al}
-                                    </span>
-                                  ))}
+                                {/* Active Alarms */}
+                                {meeting.alerts && meeting.alerts.length > 0 && (
+                                  <div className="flex items-center gap-1 text-[7.5px] font-extrabold uppercase text-amber-600 mt-1">
+                                    <Icons.Bell className="w-2.5 h-2.5" />
+                                    <span>{meeting.alerts.map(al => al === "ON_TIME" ? "No Horário" : al).join(", ")}</span>
+                                  </div>
+                                )}
+
+                                {/* Hover Action Controls */}
+                                <div className="flex justify-end gap-1 mt-2 pt-1.5 border-t border-slate-100/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditMeeting(meeting);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                    title="Editar reserva"
+                                  >
+                                    <Icons.Edit className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMeetingToDelete(meeting);
+                                    }}
+                                    className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                    title="Excluir reserva"
+                                  >
+                                    <Icons.Trash className="w-3 h-3" />
+                                  </button>
                                 </div>
                               </div>
-                            )}
-                          </div>
-
-                          {/* Right Panel: Sharp Control Action Buttons */}
-                          <div className="flex-shrink-0 flex items-center gap-1 lg:flex-col self-stretch justify-end lg:justify-start border-t lg:border-t-0 lg:border-l border-slate-100 lg:pl-6 pt-3 lg:pt-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditMeeting(meeting);
-                              }}
-                              className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                              title="Editar reserva"
-                            >
-                              <Icons.Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMeetingToDelete(meeting);
-                              }}
-                              className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                              title="Excluir reserva"
-                            >
-                              <Icons.Trash className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
+                            );
+                          })
+                        )}
                       </div>
-                    );
-                  })}
-
-                {filteredMeetings.length === 0 && (
-                  <div className="text-center py-24 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-250">
-                    {meetingsSearch.trim() ? (
-                      <Icons.Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    ) : (
-                      <Icons.Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    )}
-                    <h4 className="text-base font-black text-slate-700 uppercase tracking-widest mb-2 font-sans">
-                      {meetingsSearch.trim() ? "Nenhum Resultado" : "Período Livre"}
-                    </h4>
-                    <p className="text-sm font-medium text-slate-500 font-sans">
-                      {meetingsSearch.trim()
-                        ? "Não encontramos nenhuma reserva com os critérios informados."
-                        : "Nenhuma reserva para esta data."}
-                    </p>
-                  </div>
-                )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
