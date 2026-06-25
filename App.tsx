@@ -4441,10 +4441,19 @@ export default function App() {
             where("sector", "==", Sector.GENERAL),
             where("sector", "==", null),
             where("sector", "==", ""),
+            where("userId", "==", userProfile.id),
+            where("participantsIds", "array-contains", userProfile.id),
           ),
         );
       } else {
-        q = firestoreQuery(q, where("sector", "==", userProfile.sector));
+        q = firestoreQuery(
+          q,
+          or(
+            where("sector", "==", userProfile.sector),
+            where("userId", "==", userProfile.id),
+            where("participantsIds", "array-contains", userProfile.id),
+          ),
+        );
       }
     } else if (
       userProfile.role === UserRole.LAWYER ||
