@@ -783,7 +783,7 @@ const MonitoringView = ({
     printWindow.document.write(`
       <html>
         <head>
-          <title>${pub.numeroProcesso} - JurisControl</title>
+          <title>${pub.numeroProcesso} - LexPremium</title>
           <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; line-height: 1.6; }
             h1 { font-size: 20px; font-weight: 800; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; }
@@ -830,7 +830,7 @@ const MonitoringView = ({
       `Publicação Processual - Proc ${pub.numeroProcesso}`,
     );
     const body = encodeURIComponent(
-      `Prezado(a),\n\nSegue abaixo o teor da publicação encontrada no DJEN:\n\nTribunal: ${pub.tribunal}\nProcesso: ${pub.numeroProcesso}\nData: ${new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR")}\n\nTeor:\n\n${pub.texto}\n\nJurisControl.`,
+      `Prezado(a),\n\nSegue abaixo o teor da publicação encontrada no DJEN:\n\nTribunal: ${pub.tribunal}\nProcesso: ${pub.numeroProcesso}\nData: ${new Date(pub.dataDisponibilizacao).toLocaleDateString("pt-BR")}\n\nTeor:\n\n${pub.texto}\n\nLexPremium.`,
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
     showToast("Disparando cliente de e-mail local...");
@@ -3139,6 +3139,23 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   categoriasTarefas: Object.values(AdminTaskCategory),
 };
 
+const PORTUGUESE_MONTHS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+const AVAILABLE_YEARS = [2024, 2025, 2026, 2027, 2028, 2029];
+
 export default function App() {
   const [view, setView] = useState("dashboard");
   const [deadlinesSearch, setDeadlinesSearch] = useState("");
@@ -3627,6 +3644,10 @@ export default function App() {
     dataFim: "",
   });
 
+  const [topDemandPeriodType, setTopDemandPeriodType] = useState<'geral' | 'mensal' | 'anual'>('geral');
+  const [topDemandSelectedYear, setTopDemandSelectedYear] = useState<number>(new Date().getFullYear());
+  const [topDemandSelectedMonth, setTopDemandSelectedMonth] = useState<number>(new Date().getMonth());
+
   const [dynamicSettings, setDynamicSettings] =
     useState<NotificationSettings>(DEFAULT_SETTINGS);
 
@@ -3839,6 +3860,34 @@ export default function App() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
   }, [deadlines]);
+
+  const topDemandData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    deadlines.forEach((d) => {
+      if (!d.empresa) return;
+
+      let match = false;
+      if (topDemandPeriodType === "geral") {
+        match = true;
+      } else if (topDemandPeriodType === "anual") {
+        const dYear = d.data ? parseInt(d.data.split("-")[0], 10) : null;
+        match = dYear === topDemandSelectedYear;
+      } else if (topDemandPeriodType === "mensal") {
+        const parts = d.data ? d.data.split("-") : [];
+        const dYear = parts[0] ? parseInt(parts[0], 10) : null;
+        const dMonth = parts[1] ? parseInt(parts[1], 10) : null;
+        match = dYear === topDemandSelectedYear && dMonth === (topDemandSelectedMonth + 1);
+      }
+
+      if (match) {
+        counts[d.empresa] = (counts[d.empresa] || 0) + 1;
+      }
+    });
+
+    return Object.entries(counts)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [deadlines, topDemandPeriodType, topDemandSelectedYear, topDemandSelectedMonth]);
 
   const officeLawyers = useMemo(() => {
     if (teamProfiles && teamProfiles.length > 0) {
@@ -7650,6 +7699,147 @@ export default function App() {
     docPdf.save("lexpremium_report.pdf");
   };
 
+  const handleExportTopDemandantesPDF = () => {
+    const docPdf = new jsPDF();
+    
+    // Header styling
+    docPdf.setFont("Helvetica", "bold");
+    docPdf.setFontSize(22);
+    docPdf.setTextColor(15, 23, 42); // slate-900
+    docPdf.text("LEX PREMIUM", 14, 20);
+
+    docPdf.setFontSize(10);
+    docPdf.setFont("Helvetica", "bold");
+    docPdf.setTextColor(16, 185, 129); // emerald-500
+    docPdf.text("RELATÓRIO OPERACIONAL - TOP DEMANDANTES", 14, 26);
+
+    // Period definition
+    const periodLabel = topDemandPeriodType === "geral" 
+      ? "Período: Geral (Todo o histórico)" 
+      : topDemandPeriodType === "anual" 
+        ? `Período: Ano de ${topDemandSelectedYear}` 
+        : `Período: Mês de ${PORTUGUESE_MONTHS[topDemandSelectedMonth]} de ${topDemandSelectedYear}`;
+
+    docPdf.setFontSize(9);
+    docPdf.setFont("Helvetica", "normal");
+    docPdf.setTextColor(100, 116, 139); // slate-500
+    docPdf.text(periodLabel, 14, 32);
+    docPdf.text(`Data de Geração: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 14, 37);
+
+    // Separator line
+    docPdf.setDrawColor(241, 245, 249); // slate-100
+    docPdf.setLineWidth(1);
+    docPdf.line(14, 42, 196, 42);
+
+    if (topDemandData.length === 0) {
+      docPdf.setFont("Helvetica", "bold");
+      docPdf.setFontSize(12);
+      docPdf.setTextColor(100, 116, 139);
+      docPdf.text("Nenhum dado encontrado para o período selecionado.", 14, 60);
+      docPdf.save(`top_demandantes_${topDemandPeriodType}.pdf`);
+      return;
+    }
+
+    // Chart title
+    docPdf.setFont("Helvetica", "bold");
+    docPdf.setFontSize(11);
+    docPdf.setTextColor(15, 23, 42);
+    docPdf.text("GRÁFICO: DISTRIBUIÇÃO DOS DEMANDANTES (TOP 10)", 14, 50);
+
+    // Render horizontal bar chart for top 10 (or all if fewer than 10)
+    let chartY = 58;
+    const maxItemsInChart = Math.min(topDemandData.length, 10);
+    const maxVal = topDemandData[0]?.total || 1;
+    const chartBarWidth = 110; // width in mm
+
+    for (let i = 0; i < maxItemsInChart; i++) {
+      const item = topDemandData[i];
+      const percentOfMax = item.total / maxVal;
+      const computedBarWidth = Math.max(percentOfMax * chartBarWidth, 2);
+
+      // Rank and Name
+      docPdf.setFont("Helvetica", "bold");
+      docPdf.setFontSize(8);
+      docPdf.setTextColor(51, 65, 85); // slate-700
+      docPdf.text(`${i + 1}. ${item.name}`, 14, chartY + 3.5);
+
+      // Track (Background bar)
+      docPdf.setFillColor(248, 250, 252); // slate-50
+      docPdf.rect(70, chartY, chartBarWidth, 5, "F");
+
+      // Bar fill (Emerald series for top 3, slate for rest)
+      if (i === 0) {
+        docPdf.setFillColor(16, 185, 129); // emerald-500
+      } else if (i === 1) {
+        docPdf.setFillColor(52, 211, 153); // emerald-400
+      } else if (i === 2) {
+        docPdf.setFillColor(110, 231, 183); // emerald-300
+      } else {
+        docPdf.setFillColor(148, 163, 184); // slate-400
+      }
+      docPdf.rect(70, chartY, computedBarWidth, 5, "F");
+
+      // Count & relative share text
+      docPdf.setFont("Helvetica", "normal");
+      docPdf.setFontSize(8);
+      docPdf.setTextColor(100, 116, 139); // slate-500
+      docPdf.text(`${item.total} ${item.total === 1 ? "prazo" : "prazos"} (${Math.round(percentOfMax * 100)}%)`, 70 + chartBarWidth + 4, chartY + 3.5);
+
+      chartY += 9;
+    }
+
+    // Tabela section start y
+    const tableStartY = chartY + 8;
+    
+    // Draw separator line before table
+    docPdf.setDrawColor(241, 245, 249);
+    docPdf.line(14, tableStartY - 4, 196, tableStartY - 4);
+
+    docPdf.setFont("Helvetica", "bold");
+    docPdf.setFontSize(11);
+    docPdf.setTextColor(15, 23, 42);
+    docPdf.text("DADOS COMPLETOS (TODOS OS DEMANDANTES)", 14, tableStartY + 2);
+
+    // Prepare table data for ALL demanders
+    const totalPrazos = topDemandData.reduce((acc, curr) => acc + curr.total, 0);
+    const tableRows = topDemandData.map((item, idx) => {
+      const sharePercent = totalPrazos > 0 ? ((item.total / totalPrazos) * 100).toFixed(1) + "%" : "0%";
+      return [
+        `${idx + 1}º`,
+        item.name,
+        `${item.total} ${item.total === 1 ? "prazo" : "prazos"}`,
+        sharePercent
+      ];
+    });
+
+    (docPdf as any).autoTable({
+      head: [["Posição", "Cliente / Demandante", "Quantidade de Prazos", "Participação %"]],
+      body: tableRows,
+      startY: tableStartY + 6,
+      theme: "striped",
+      headStyles: {
+        fillColor: [15, 23, 42], // slate-900 (matches layout style perfectly)
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 9,
+        halign: "left"
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [51, 65, 85] // slate-700
+      },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 45 },
+        3: { cellWidth: 35 }
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    docPdf.save(`top_demandantes_${topDemandPeriodType}.pdf`);
+  };
+
   const handleExportBackup = () => {
     const backupData = {
       version: "1.1",
@@ -10659,100 +10849,255 @@ service cloud.firestore {
 
         {view === "reports" && (
           <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -translate-y-12 translate-x-12 opacity-50 group-hover:scale-110 transition-all"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Card 1: Filtros (takes 2 cols) */}
+              <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden group flex flex-col justify-between">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -translate-y-12 translate-x-12 opacity-50 group-hover:scale-110 transition-all"></div>
 
-              <div className="flex items-center gap-4 mb-6 relative">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
-                  <Icons.Clock />
-                </div>
                 <div>
-                  <h3 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
-                    Filtros do Relatório
-                  </h3>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                    Personalize as opções abaixo para gerar e exportar
-                    relatórios de prazos
-                  </p>
+                  <div className="flex items-center gap-4 mb-6 relative">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                      <Icons.Clock />
+                    </div>
+                    <div>
+                      <h3 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
+                        Filtros do Relatório
+                      </h3>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                        Personalize as opções abaixo para gerar e exportar
+                        relatórios de prazos
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
+                        Cliente
+                      </label>
+                      <select
+                        className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs select-custom outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all cursor-pointer"
+                        value={reportFilters.empresa || ""}
+                        onChange={(e) =>
+                          setReportFilters((p) => ({
+                            ...p,
+                            empresa: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Todos os Clientes</option>
+                        {unifiedEmpresasOptions.map((emp) => (
+                          <option key={emp} value={emp}>
+                            {emp}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
+                        Responsável
+                      </label>
+                      <select
+                        className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs select-custom outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all cursor-pointer"
+                        value={reportFilters.responsavel || ""}
+                        onChange={(e) =>
+                          setReportFilters((p) => ({
+                            ...p,
+                            responsavel: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Todos os Advogados</option>
+                        {officeLawyers.map((resp) => (
+                          <option key={resp} value={resp}>
+                            {resp}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
+                        Início
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all"
+                        value={reportFilters.dataInicio || ""}
+                        onChange={(e) =>
+                          setReportFilters((p) => ({
+                            ...p,
+                            dataInicio: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
+                        Fim
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all"
+                        value={reportFilters.dataFim || ""}
+                        onChange={(e) =>
+                          setReportFilters((p) => ({
+                            ...p,
+                            dataFim: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
-                    Cliente
-                  </label>
-                  <select
-                    className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs select-custom outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all cursor-pointer"
-                    value={reportFilters.empresa || ""}
-                    onChange={(e) =>
-                      setReportFilters((p) => ({
-                        ...p,
-                        empresa: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Todos os Clientes</option>
-                    {unifiedEmpresasOptions.map((emp) => (
-                      <option key={emp} value={emp}>
-                        {emp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
-                    Responsável
-                  </label>
-                  <select
-                    className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs select-custom outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all cursor-pointer"
-                    value={reportFilters.responsavel || ""}
-                    onChange={(e) =>
-                      setReportFilters((p) => ({
-                        ...p,
-                        responsavel: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Todos os Advogados</option>
-                    {officeLawyers.map((resp) => (
-                      <option key={resp} value={resp}>
-                        {resp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
-                    Início
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all"
-                    value={reportFilters.dataInicio || ""}
-                    onChange={(e) =>
-                      setReportFilters((p) => ({
-                        ...p,
-                        dataInicio: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1.5">
-                    Fim
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full bg-slate-50/50 p-2.5 rounded-xl font-bold text-xs outline-none border border-slate-100 focus:border-slate-300 focus:ring-4 focus:ring-blue-50/50 transition-all"
-                    value={reportFilters.dataFim || ""}
-                    onChange={(e) =>
-                      setReportFilters((p) => ({
-                        ...p,
-                        dataFim: e.target.value,
-                      }))
-                    }
-                  />
+              {/* Card 2: Top Demandantes (takes 1 col) */}
+              <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden group flex flex-col justify-between">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -translate-y-12 translate-x-12 opacity-50 group-hover:scale-110 transition-all"></div>
+
+                <div className="relative w-full">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shadow-sm shrink-0">
+                        <Icons.Factory className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 tracking-tight">
+                          Top Demandantes
+                        </h3>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                          Maiores demandadores de prazos
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleExportTopDemandantesPDF}
+                      className="p-1.5 md:p-2 bg-emerald-50 border border-emerald-100/80 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm flex items-center gap-1 text-[8px] font-black uppercase tracking-wider shrink-0"
+                      title="Exportar todos os demandantes para PDF"
+                    >
+                      <Icons.Download className="w-3.5 h-3.5" />
+                      PDF
+                    </button>
+                  </div>
+
+                  {/* Filter Controls: Period type */}
+                  <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 mb-4 shadow-inner">
+                    <button
+                      onClick={() => setTopDemandPeriodType("mensal")}
+                      className={`flex-1 py-1.5 rounded-lg text-center text-[9px] font-black uppercase tracking-widest transition-all ${
+                        topDemandPeriodType === "mensal"
+                          ? "bg-[#0F172A] text-white shadow-md"
+                          : "text-slate-500 hover:text-slate-950"
+                      }`}
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      onClick={() => setTopDemandPeriodType("anual")}
+                      className={`flex-1 py-1.5 rounded-lg text-center text-[9px] font-black uppercase tracking-widest transition-all ${
+                        topDemandPeriodType === "anual"
+                          ? "bg-[#0F172A] text-white shadow-md"
+                          : "text-slate-500 hover:text-slate-950"
+                      }`}
+                    >
+                      Anual
+                    </button>
+                    <button
+                      onClick={() => setTopDemandPeriodType("geral")}
+                      className={`flex-1 py-1.5 rounded-lg text-center text-[9px] font-black uppercase tracking-widest transition-all ${
+                        topDemandPeriodType === "geral"
+                          ? "bg-[#0F172A] text-white shadow-md"
+                          : "text-slate-500 hover:text-slate-950"
+                      }`}
+                    >
+                      Geral
+                    </button>
+                  </div>
+
+                  {/* Period selection inputs if not General */}
+                  {topDemandPeriodType !== "geral" && (
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {topDemandPeriodType === "mensal" && (
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Mês</label>
+                          <select
+                            value={topDemandSelectedMonth}
+                            onChange={(e) => setTopDemandSelectedMonth(parseInt(e.target.value, 10))}
+                            className="w-full bg-slate-50 p-2 rounded-lg font-bold text-[10px] outline-none border border-slate-100 focus:border-slate-300 transition-all cursor-pointer"
+                          >
+                            {PORTUGUESE_MONTHS.map((m, idx) => (
+                              <option key={m} value={idx}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className={topDemandPeriodType === "mensal" ? "space-y-1" : "col-span-2 space-y-1"}>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ano</label>
+                        <select
+                          value={topDemandSelectedYear}
+                          onChange={(e) => setTopDemandSelectedYear(parseInt(e.target.value, 10))}
+                          className="w-full bg-slate-50 p-2 rounded-lg font-bold text-[10px] outline-none border border-slate-100 focus:border-slate-300 transition-all cursor-pointer"
+                        >
+                          {AVAILABLE_YEARS.map((y) => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* The actual list of Top Demanders with beautifully styled Progress Bars */}
+                  <div className="space-y-3 mt-4">
+                    {topDemandData.length === 0 ? (
+                      <div className="py-8 text-center text-slate-400 font-bold text-[10px] uppercase tracking-wider bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                        Nenhuma demanda registrada
+                      </div>
+                    ) : (
+                      topDemandData.slice(0, 5).map((item, index) => {
+                        const maxCount = topDemandData[0]?.total || 1;
+                        const percentage = Math.round((item.total / maxCount) * 100);
+
+                        // Beautiful colors for rank badges
+                        const rankColors = [
+                          "bg-amber-100 text-amber-800 border-amber-200",
+                          "bg-slate-100 text-slate-800 border-slate-200",
+                          "bg-orange-100 text-orange-800 border-orange-200",
+                          "bg-slate-50 text-slate-600 border-slate-100",
+                          "bg-slate-50 text-slate-600 border-slate-100",
+                        ];
+
+                        return (
+                          <div key={item.name} className="space-y-1">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-slate-800">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center font-black text-[9px] border ${rankColors[index] || "bg-slate-50 text-slate-600 border-slate-100"}`}>
+                                  {index + 1}
+                                </span>
+                                <span className="font-extrabold uppercase tracking-tight truncate max-w-[130px] sm:max-w-[180px]">
+                                  {item.name}
+                                </span>
+                              </div>
+                              <span className="font-mono text-slate-500 text-[10px]">
+                                {item.total} {item.total === 1 ? "prazo" : "prazos"}
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${percentage}%` }}
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  index === 0
+                                    ? "bg-emerald-500"
+                                    : index === 1
+                                      ? "bg-emerald-400"
+                                      : "bg-slate-400"
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
