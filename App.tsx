@@ -2894,6 +2894,20 @@ const Sidebar = ({
           if (userProfile?.sector === Sector.IT) {
             return ["dashboard", "agenda", "deadlines", "timesheet", "settings"].includes(item.id);
           }
+          if (userProfile?.sector === Sector.OPERATIONAL) {
+            return [
+              "dashboard",
+              "agenda",
+              "meetings",
+              "deadlines",
+              "timesheet",
+              "clients",
+              "correspondence",
+              "reports",
+              "team",
+              "settings",
+            ].includes(item.id);
+          }
           if (item.id === "team") {
             return (
               userProfile?.role === UserRole.ADMIN ||
@@ -5476,7 +5490,7 @@ export default function App() {
                               return null;
                             return (
                               <option key={r} value={r}>
-                                {r}
+                                {r === UserRole.LAWYER && member.sector === Sector.OPERATIONAL ? "ANALISTA" : r}
                               </option>
                             );
                           })}
@@ -5489,7 +5503,7 @@ export default function App() {
                               : "bg-blue-100 text-blue-600"
                           }`}
                         >
-                          {member.role}
+                          {member.role === UserRole.LAWYER && member.sector === Sector.OPERATIONAL ? "ANALISTA" : member.role}
                         </span>
                       )}
                     </td>
@@ -5577,7 +5591,7 @@ export default function App() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-700 text-[8px] font-black uppercase tracking-wider">
-                        {invite.role}
+                        {invite.role === UserRole.LAWYER && invite.sector === Sector.OPERATIONAL ? "ANALISTA" : invite.role}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -7314,9 +7328,11 @@ export default function App() {
         userProfile.sector !== Sector.GENERAL
       ) {
         const matchesSector =
-          !d.sector ||
-          d.sector === userProfile.sector ||
-          d.sector === Sector.GENERAL;
+          userProfile.sector === Sector.OPERATIONAL
+            ? d.sector === Sector.OPERATIONAL
+            : (!d.sector ||
+              d.sector === userProfile.sector ||
+              d.sector === Sector.GENERAL);
         if (!matchesSector) return false;
       }
 
@@ -8480,9 +8496,11 @@ service cloud.firestore {
                     if (userProfile?.role === UserRole.ADMIN) return true;
                     if (
                       userProfile?.role === UserRole.COORDINATOR &&
-                      (!d.sector ||
-                        d.sector === userProfile.sector ||
-                        d.sector === Sector.GENERAL)
+                      (userProfile.sector === Sector.OPERATIONAL
+                        ? d.sector === Sector.OPERATIONAL
+                        : (!d.sector ||
+                          d.sector === userProfile.sector ||
+                          d.sector === Sector.GENERAL))
                     )
                       return true;
                     if (
@@ -8507,9 +8525,11 @@ service cloud.firestore {
                     if (userProfile?.role === UserRole.ADMIN) return true;
                     if (
                       userProfile?.role === UserRole.COORDINATOR &&
-                      (!t.sector ||
-                        t.sector === userProfile.sector ||
-                        t.sector === Sector.GENERAL)
+                      (userProfile.sector === Sector.OPERATIONAL
+                        ? t.sector === Sector.OPERATIONAL
+                        : (!t.sector ||
+                          t.sector === userProfile.sector ||
+                          t.sector === Sector.GENERAL))
                     )
                       return true;
                     if (
@@ -10124,9 +10144,11 @@ service cloud.firestore {
                     if (userProfile?.role === UserRole.ADMIN) return true;
                     if (
                       userProfile?.role === UserRole.COORDINATOR &&
-                      (!t.sector ||
-                        t.sector === userProfile.sector ||
-                        t.sector === Sector.GENERAL)
+                      (userProfile.sector === Sector.OPERATIONAL
+                        ? t.sector === Sector.OPERATIONAL
+                        : (!t.sector ||
+                          t.sector === userProfile.sector ||
+                          t.sector === Sector.GENERAL))
                     )
                       return true;
                     if (
@@ -11255,7 +11277,8 @@ service cloud.firestore {
 
         {view === "team" &&
           (userProfile?.role === UserRole.ADMIN ||
-            userProfile?.role === UserRole.COORDINATOR) &&
+            userProfile?.role === UserRole.COORDINATOR ||
+            userProfile?.sector === Sector.OPERATIONAL) &&
           TeamManagement()}
 
         {view === "superadmin" && user?.email === "rudyendo@gmail.com" && (
@@ -14184,11 +14207,19 @@ service cloud.firestore {
                       }))
                     }
                   >
-                    {Object.values(Sector).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {Object.values(Sector).map((s) => {
+                      if (
+                        userProfile?.role === UserRole.COORDINATOR &&
+                        userProfile.sector !== Sector.GENERAL &&
+                        s !== userProfile.sector
+                      )
+                        return null;
+                      return (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -14977,11 +15008,19 @@ service cloud.firestore {
                       }))
                     }
                   >
-                    {Object.values(Sector).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {Object.values(Sector).map((s) => {
+                      if (
+                        userProfile?.role === UserRole.COORDINATOR &&
+                        userProfile.sector !== Sector.GENERAL &&
+                        s !== userProfile.sector
+                      )
+                        return null;
+                      return (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -15249,7 +15288,7 @@ service cloud.firestore {
                         return null;
                       return (
                         <option key={r} value={r}>
-                          {r}
+                          {r === UserRole.LAWYER && newUserSector === Sector.OPERATIONAL ? "ANALISTA" : r}
                         </option>
                       );
                     })}
