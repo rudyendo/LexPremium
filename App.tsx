@@ -8778,7 +8778,7 @@ service cloud.firestore {
                                   <Icons.Check />
                                 </div>
                               </button>
-                              <div className="flex justify-between items-start gap-1 pr-6">
+                              <div className="flex flex-col items-start gap-1">
                                 <span
                                   className={`${isCompleted ? "bg-emerald-600 text-white" : isUnderReview ? "bg-yellow-500 text-slate-950 font-black shadow-xs" : "bg-red-600 text-white"} rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1 shrink-0`}
                                 >
