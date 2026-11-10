@@ -8697,40 +8697,40 @@ service cloud.firestore {
                               d.responsavel.toLowerCase().trim() ===
                                 userProfile.name.toLowerCase().trim());
 
+                          const isUnderCoordReview =
+                            d.reviewState === ReviewState.WAITING_COORDINATOR ||
+                            d.reviewState ===
+                              ReviewState.REVIEWING_COORDINATOR ||
+                            d.reviewState ===
+                              ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR;
+
+                          const isUnderAdminReview =
+                            d.reviewState === ReviewState.WAITING_ADMIN ||
+                            d.reviewState === ReviewState.REVIEWING_ADMIN;
+
+                          const isUnderReview =
+                            isUnderCoordReview || isUnderAdminReview;
+
                           let cardClasses = "bg-red-50 border-red-100 border";
 
                           if (isCompleted) {
                             cardClasses =
                               "bg-emerald-50 border-emerald-100 border";
-                          } else if (
-                            d.reviewState === ReviewState.WAITING_COORDINATOR ||
-                            d.reviewState ===
-                              ReviewState.REVIEWING_COORDINATOR ||
-                            d.reviewState ===
-                              ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
-                          ) {
+                          } else if (isUnderReview) {
+                            // Amarelo vibrante e luminoso, totalmente distinto do vermelho de pendentes
                             cardClasses =
-                              "bg-yellow-100 border-yellow-400 border-2";
+                              "bg-yellow-50/90 border-yellow-400 border-2 shadow-sm font-medium";
                             if (
-                              d.reviewState !==
-                                ReviewState.REVIEWING_COORDINATOR &&
-                              userProfile?.role === UserRole.COORDINATOR
+                              (isUnderCoordReview &&
+                                d.reviewState !==
+                                  ReviewState.REVIEWING_COORDINATOR &&
+                                userProfile?.role === UserRole.COORDINATOR) ||
+                              (isUnderAdminReview &&
+                                d.reviewState === ReviewState.WAITING_ADMIN &&
+                                userProfile?.role === UserRole.ADMIN)
                             ) {
                               cardClasses +=
                                 " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
-                            }
-                          } else if (
-                            d.reviewState === ReviewState.WAITING_ADMIN ||
-                            d.reviewState === ReviewState.REVIEWING_ADMIN
-                          ) {
-                            cardClasses =
-                              "bg-orange-100 border-orange-500 border-2";
-                            if (
-                              d.reviewState === ReviewState.WAITING_ADMIN &&
-                              userProfile?.role === UserRole.ADMIN
-                            ) {
-                              cardClasses +=
-                                " animate-pulse ring-2 ring-orange-500 ring-offset-2";
                             }
                           } else if (
                             d.reviewState === ReviewState.RETURNED_TO_LAWYER
@@ -8765,24 +8765,33 @@ service cloud.firestore {
                                   e.stopPropagation();
                                   toggleStatus(d);
                                 }}
-                                className={`absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isCompleted ? "bg-emerald-600 text-white" : "bg-white text-slate-300 hover:text-emerald-600 border border-slate-100 shadow-sm"}`}
+                                className={`absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isCompleted ? "bg-emerald-600 text-white" : isUnderReview ? "bg-white text-yellow-600 hover:text-emerald-600 border border-yellow-200 shadow-sm" : "bg-white text-slate-300 hover:text-emerald-600 border border-slate-100 shadow-sm"}`}
                                 title={
                                   isCompleted
                                     ? "Marcar como pendente"
-                                    : "Concluir"
+                                    : isUnderReview
+                                      ? "Em revisão - Concluir"
+                                      : "Concluir"
                                 }
                               >
                                 <div className="scale-75">
                                   <Icons.Check />
                                 </div>
                               </button>
-                              <div className="flex justify-between items-start">
+                              <div className="flex justify-between items-start gap-1 pr-6">
                                 <span
-                                  className={`${isCompleted ? "bg-emerald-600" : "bg-red-600"} text-white rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1`}
+                                  className={`${isCompleted ? "bg-emerald-600 text-white" : isUnderReview ? "bg-yellow-500 text-slate-950 font-black shadow-xs" : "bg-red-600 text-white"} rounded font-black uppercase text-[8px] tracking-[0.2em] px-1.5 py-0.5 flex items-center gap-1 shrink-0`}
                                 >
                                   <Icons.FileText className="w-2 h-2" />{" "}
                                   PROCESSUAL
                                 </span>
+                                {isUnderReview && (
+                                  <span className="bg-yellow-200/90 text-yellow-900 border border-yellow-300/80 font-black uppercase text-[7px] tracking-wider px-1.5 py-0.5 rounded shrink-0">
+                                    {isUnderAdminReview
+                                      ? "EM VALIDAÇÃO"
+                                      : "EM REVISÃO"}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-[11px] font-bold text-slate-900 leading-tight uppercase line-clamp-2">
@@ -8792,13 +8801,15 @@ service cloud.firestore {
                                   className={`text-[7.5px] font-black uppercase tracking-widest mt-1 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded ${
                                     isCompleted
                                       ? "text-emerald-700 bg-emerald-100/60 border border-emerald-200/40"
-                                      : isMyDeadline
-                                        ? "text-red-700 bg-red-100/60 border border-red-200/40"
-                                        : "text-slate-500 bg-slate-50 border border-slate-100"
+                                      : isUnderReview
+                                        ? "text-yellow-900 bg-yellow-100 border border-yellow-300/60"
+                                        : isMyDeadline
+                                          ? "text-red-700 bg-red-100/60 border border-red-200/40"
+                                          : "text-slate-500 bg-slate-50 border border-slate-100"
                                   }`}
                                 >
                                   <Icons.Users
-                                    className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isMyDeadline ? "text-red-600" : "text-blue-500"}`}
+                                    className={`w-2 h-2 inline ${isCompleted ? "text-emerald-600" : isUnderReview ? "text-yellow-700" : isMyDeadline ? "text-red-600" : "text-blue-500"}`}
                                   />
                                   {isMyDeadline
                                     ? `★ RESP: ${getFirstName(d.responsavel)}`
@@ -8812,11 +8823,13 @@ service cloud.firestore {
                                       className={`text-[7.5px] font-black uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap px-1.5 py-0.5 rounded border ${
                                         isCompleted
                                           ? "text-emerald-600 bg-emerald-100/30 border-emerald-250/30"
-                                          : "text-slate-400 bg-slate-50 border-slate-100"
+                                          : isUnderReview
+                                            ? "text-yellow-800 bg-yellow-50 border-yellow-200"
+                                            : "text-slate-400 bg-slate-50 border-slate-100"
                                       }`}
                                     >
                                       <Icons.Users
-                                        className={`w-1.5 h-1.5 inline ${isCompleted ? "text-emerald-500" : "text-slate-400"}`}
+                                        className={`w-1.5 h-1.5 inline ${isCompleted ? "text-emerald-500" : isUnderReview ? "text-yellow-600" : "text-slate-400"}`}
                                       />{" "}
                                       ATRIBUÍDO:{" "}
                                       {getFirstName(
@@ -8828,7 +8841,7 @@ service cloud.firestore {
                                   )}
                               </div>
                               <p
-                                className={`text-[8px] font-black truncate ${isCompleted ? "text-emerald-400" : "text-slate-400"}`}
+                                className={`text-[8px] font-black truncate ${isCompleted ? "text-emerald-400" : isUnderReview ? "text-yellow-700" : "text-slate-400"}`}
                               >
                                 {d.empresa}
                               </p>
@@ -11176,32 +11189,32 @@ service cloud.firestore {
                         d.reviewState ===
                           ReviewState.VALIDATED_BY_ADMIN_WAITING_COORDINATOR
                       ) {
-                        cardClasses += " bg-yellow-50/30 border-yellow-200";
-                        statusText = "Em Coodenação";
+                        cardClasses += " bg-yellow-50/50 border-yellow-300";
+                        statusText = "Em Coordenação";
                         statusLabelClasses =
-                          "bg-yellow-200 text-yellow-800 border-yellow-300";
+                          "bg-yellow-200 text-yellow-800 border-yellow-300 font-bold";
                         if (
                           d.reviewState !== ReviewState.REVIEWING_COORDINATOR &&
                           userProfile?.role === UserRole.COORDINATOR
                         ) {
                           cardClasses +=
                             " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
-                          statusText = "Coodenação (Pendente)";
+                          statusText = "Coordenação (Pendente)";
                         }
                       } else if (
                         d.reviewState === ReviewState.WAITING_ADMIN ||
                         d.reviewState === ReviewState.REVIEWING_ADMIN
                       ) {
-                        cardClasses += " bg-orange-50/30 border-orange-200";
+                        cardClasses += " bg-yellow-50/50 border-yellow-400";
                         statusText = "Em Validação (Admin)";
                         statusLabelClasses =
-                          "bg-orange-200 text-orange-800 border-orange-300";
+                          "bg-yellow-300 text-yellow-900 border-yellow-400 font-bold";
                         if (
                           d.reviewState === ReviewState.WAITING_ADMIN &&
                           userProfile?.role === UserRole.ADMIN
                         ) {
                           cardClasses +=
-                            " animate-pulse ring-2 ring-orange-500 ring-offset-2";
+                            " animate-pulse ring-2 ring-yellow-400 ring-offset-2";
                           statusText = "Validação (Pendente)";
                         }
                       } else if (
